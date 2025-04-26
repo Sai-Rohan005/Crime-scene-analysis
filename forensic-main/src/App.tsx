@@ -15,6 +15,7 @@ import ForgotPassword from "./pages/forgotpassword"
 import Profile from "./pages/profile"
 import Common from "./pages/commons"
 import Usercases from "./pages/usercases";
+import Verification from "./pages/2ndstepVerification";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,8 @@ const App = () => (
           <Route path="/Profile" element={<Profile/>} />
           <Route path="/common" element={<Common/>} />
           <Route path="/usercases/:caseId" element={<Usercases/>} />
+          <Route path="/verification" element={<Verification/>} />
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

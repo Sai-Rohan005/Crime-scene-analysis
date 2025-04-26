@@ -40,6 +40,36 @@ export default function ForgotPassword() {
 
   }
 
+  const resendotp=async()=>{
+    try{
+
+        const email=formData.email
+        const resend=await axios.post("http://localhost:5500/resent_otp", {email},{
+            headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken")}` },
+        })
+        if(resend.data.status===200){
+            toast({
+                title: "code sent",
+                description: resend.data.message,
+            });
+        }else{
+            toast({
+                variant:"destructive",
+                title: "Error",
+                description: resend.data.message,
+            });
+        }
+    }catch(err){
+        toast({
+            variant:"destructive",
+            title: "Error",
+            description: err?.response?.data?.message || err.message || "Something went wrong",
+        });
+
+    }
+  }
+
+
   // Step 1: Send reset code to email
   const handleSendCode = async (e) => {
     e.preventDefault();
@@ -197,6 +227,17 @@ export default function ForgotPassword() {
         </form>
 
         {message && <p className="text-center mt-4 text-sm" style={{color: boolmail ? 'green' :'red'}}>{message}</p>}
+
+          
+        <div className="text-center text-sm">
+              Didn't receive the code?{" "}
+              <button
+                onClick={(resendotp)}
+                className="font-medium text-primary hover:underline"
+              >
+                Resend OTP
+              </button>
+          </div>
 
         <div className="text-center mt-4">
           <a href="/signin" className="text-sm text-blue-600 hover:underline">

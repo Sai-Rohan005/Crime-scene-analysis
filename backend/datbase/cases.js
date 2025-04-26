@@ -1,38 +1,17 @@
-const mongoose = require('mongoose');
+const mongoose = require('./db');
 
-// Connect to MongoDB
-mongoose.connect("mongodb://localhost:27017/differentcases", {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => {
-  console.log("📡 MongoDB connected successfully");
-}).catch((err) => {
-  console.error("❌ MongoDB connection error:", err);
-});
-
-// Define the schema for Cases
 const caseSchema = new mongoose.Schema({
-  caseTitle: {
-    type: String,
-    required: true,
-    unique: true, 
-  },
-  caseType: {
-    type: String,
-    required: true,
-  },
-  email:{
-    type:String,
-    required:true,
-  },
-  reports: { 
-    type: [String],
-    default: [],  
-  }
-}, { timestamps: true });  
+  caseTitle: { type: String, required: true, unique: true },
+  caseType: { type: String, required: true },
+  email: { type: String, required: true },
+  images: [
+    {
+      image_id: String,
+      data: Buffer,
+      contentType: String,
+      uploadedAt: { type: Date, default: Date.now }
+    }
+  ]
+}, { timestamps: true });
 
-
-const Cases = mongoose.model('Cases', caseSchema);
-
-
-module.exports = Cases;
+module.exports = mongoose.model('Cases', caseSchema);

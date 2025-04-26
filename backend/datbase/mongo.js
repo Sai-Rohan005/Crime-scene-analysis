@@ -1,29 +1,12 @@
-let mongoose=require('mongoose');
+const mongoose = require('./db');
 
-mongoose.connect("mongodb://localhost:27017/differentcases",{useNewUrlParser:true,useUnifiedTopology:true});
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  password: String,
+  username: String,
+  createdon: Date,
+  profile: String,
+  reports: [String]
+});
 
-const authourised=new mongoose.Schema({
-    username:{
-        type:String,
-    },
-    createdon:{
-        type:Date
-    },
-    email:{
-        type:String,
-        required:true,
-        unique:true,
-    },
-    password:{
-        type:String,
-        required:true
-    },
-    profile:{
-        type:String
-    },
-    reports:[]
-
-})
-const structure=mongoose.model('user',authourised);
-
-module.exports=structure;
+module.exports = mongoose.model('User', userSchema);

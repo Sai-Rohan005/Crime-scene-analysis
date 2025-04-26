@@ -55,10 +55,10 @@ export default function SignIn() {
           description: response.data.message,
         });
 
-        // Navigate after a slight delay
-        setTimeout(() => {
-          navigate("/dashboard");
-        }, 1500);
+        
+        navigate('/dashboard');
+        // navigate("/verification");
+        
       }
     } catch (error) {
       if (error.response) {
