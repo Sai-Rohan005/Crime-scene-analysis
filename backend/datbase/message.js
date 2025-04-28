@@ -1,11 +1,12 @@
 const mongoose = require('./db');
 
 const conversationSchema = new mongoose.Schema({
-  userIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  case_id:String,
+  userIds: String,
   messages: [
     {
       index: Number,
-      senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      senderId: String,
       text: String,
       timestamp: { type: Date, default: Date.now }
     }

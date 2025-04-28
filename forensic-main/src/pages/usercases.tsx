@@ -1,5 +1,3 @@
-
-// FULL UPDATED CODE
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -48,7 +46,7 @@ import {
   Send
 
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 export default function Case() {
@@ -72,68 +70,168 @@ export default function Case() {
         }
     };
 
-    // useEffect(async()=>{
-    //     try{
-    //         const chat=await axios.post("http://localhost:5500/commonscases",)
-    //     }
-    // })
-
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
-
-        let uploadedCount = 0;
-
-        Array.from(files).forEach((file) => {
-            if (file.type.startsWith("image/")) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    if (e.target?.result) {
-                        setUploadedImages((prev) => [...prev, e.target!.result!.toString()]);
-                        uploadedCount++;
-                        if (uploadedCount === files.length) {
-                            toast({
-                                title: "Upload Successful",
-                                description: `Uploaded ${files.length} image${files.length !== 1 ? "s" : ""}.`,
-                            });
-                        }
-                    }
-                };
-                reader.readAsDataURL(file);
-            } else {
-                toast({
-                    title: "Invalid File Type",
-                    description: "Only image files are supported at this time.",
-                    variant: "destructive",
-                });
-            }
-        });
-
-        if (e.target) {
-            e.target.value = "";
+    useEffect(() => {
+      const fetchImages = async () => {
+        try {
+          // Fetch images for the given caseId
+          const response = await axios.get(`http://localhost:5500/get_case_images/${caseId}`);
+          console.log("Response from backend:", response); // Log the entire response
+    
+          if (response.data && Array.isArray(response.data.images)) {
+            const { images } = response.data; // Get images array from response
+            const imageUrls = images.map((image) => `http://localhost:5500/images/${image.image_id}`);
+            setUploadedImages(imageUrls); // Store the image URLs in the state
+          } else {
+            toast({
+              variant: "destructive",
+              title: "Fetching Files",
+              description: "No images found for this case."
+            });
+          }
+        } catch (err) {
+          console.log("Error fetching images:", err);
+          toast({
+            variant: "destructive",
+            title: "Error Fetching Images",
+            description: "There was an error while fetching images."
+          });
         }
-    };
+      };
+    
+      if (caseId) {
+        fetchImages(); // Trigger fetch if caseId exists
+      }
+    
+    }, [caseId, toast]); // Effect triggers when caseId changes
+    
+  
+  
 
-    const handleDeleteImage = (index: number) => {
-        const newImages = [...uploadedImages];
-        newImages.splice(index, 1);
-        setUploadedImages(newImages);
 
-        toast({
-            title: "Image Deleted",
-            description: "The image has been removed from your case.",
-        });
+// const handleFileUpload = async(e: React.ChangeEvent<HTMLInputElement>) => {
+//     const files = e.target.files;
+//     if (!files || files.length === 0) return;
 
-        if (selectedImage === uploadedImages[index]) {
-            setSelectedImage(null);
-            setSummary(null);
-        }
-    };
+//     let uploadedCount = 0;
+//     const formData=new FormData();
+//     formData.append("case_id",caseName);
+            
+//     Array.from(files).forEach((file) => {
+//         if (file.type.startsWith("image/")) {
+//             const reader = new FileReader();
+//             formData.append("images", file);
+//             reader.onload = async (e) => {
+//                 if (e.target?.result) {
+//                     const base64Image = e.target.result.toString();
+//                     setUploadedImages((prev) => [...prev, base64Image]);
+//                     uploadedCount++;
 
-    const handleImageClick = (imageSrc: string) => {
-        setSelectedImage(imageSrc);
-        setSummary(null);
-    };
+                   
+//                 }
+//             };
+//             reader.readAsDataURL(file);
+//         } else {
+//             toast({
+//                 title: "Invalid File Type",
+//                 description: "Only image files are supported at this time.",
+//                 variant: "destructive",
+//             });
+//         }
+//     });
+//     try {
+//       // Send the base64 image to the backend
+//       const fileup=await axios.post("http://localhost:5500/Upload_images", formData ,{
+//         headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken")}` },});
+
+
+//         if(fileup.data.status!==200){
+//           toast({
+//             variant:"destructive",
+//             title:"File upload",
+//             description:fileup.data.message
+//           })
+//         }
+      
+
+//       if (uploadedCount === files.length) {
+//           toast({
+//               title: "Upload Successful",
+//               description: `Uploaded ${files.length} image${files.length !== 1 ? "s" : ""}.`,
+//           });
+//       }
+//   } catch (error) {
+//       toast({
+//           title: "Upload Failed",
+//           description: `Failed to upload:`,
+//           variant: "destructive",
+//       });
+//   }
+
+//     if (e.target) {
+//         e.target.value = "";
+//     }
+// };
+
+
+const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const files = e.target.files;
+  if (!files || files.length === 0) return;
+
+  const formData = new FormData();
+  formData.append("case_id", caseName);
+
+  // Append each file directly to the formData
+  Array.from(files).forEach((file) => {
+      if (file.type.startsWith("image/")) {
+          formData.append("images", file); // Append image directly to FormData
+      } else {
+          toast({
+              title: "Invalid File Type",
+              description: "Only image files are supported.",
+              variant: "destructive",
+          });
+      }
+  });
+
+  try {
+      const response = await axios.post("http://localhost:5500/Upload_images", formData, {
+          headers: {
+              Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+          },
+      });
+
+      // Handle server response
+      if (response.data.status !== 200) {
+          toast({
+              variant: "destructive",
+              title: "File Upload Error",
+              description: response.data.message,
+          });
+      } else {
+          toast({
+              title: "Upload Successful",
+              description: `Uploaded ${files.length} image${files.length !== 1 ? "s" : ""}.`,
+          });
+
+          // Optionally handle response here, like refreshing uploaded images
+          setUploadedImages((prev) => [
+              ...prev,
+              ...Array.from(files).map((file) => URL.createObjectURL(file)),
+          ]);
+      }
+  } catch (error) {
+      toast({
+          title: "Upload Failed",
+          description: "Failed to upload images. Please try again.",
+          variant: "destructive",
+      });
+  }
+
+  // Reset file input after upload
+  if (e.target) {
+      e.target.value = "";
+  }
+};
 
     
     const fetchSummary = async () => {
@@ -185,10 +283,13 @@ export default function Case() {
         { from: "other", text: "Hello! How can I help you today?" },
       ]);
       
-    const [chatMessages, setChatMessages] = useState<{ text: string, isBot: boolean }[]>([]);
+    const [chatMessages, setChatMessages] = useState<{
+      id: number; text: string, isBot: boolean 
+}[]>([]);
     const [messageInput, setMessageInput] = useState('');
 
     
+   
     const sendMessage = async () => {
       if (!messageInput.trim()) return;
     
@@ -200,25 +301,38 @@ export default function Case() {
       setChatMessages(prev => [...prev, { id: tempId, text: currentMessage, isBot: false, sending: true }]);
     
       try {
-        await axios.post('http://localhost:5500/messages', {
-          // receiverId,
+        const respchat = await axios.post(`http://localhost:5500/message/${caseId}`, {
           text: currentMessage
+        }, {
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+          },
         });
     
-        // After success, mark message as sent
-        // setChatMessages(prev => prev.map(msg => 
-        //   msg.id === tempId ? { ...msg, sending: false } : msg
-        // ));
+        console.log('Response:', respchat);
     
+        // After success, mark message as sent
+        setChatMessages(prev =>
+          prev.map(msg =>
+            msg.id === tempId ? { ...msg, sending: false, sent: true } : msg
+          )
+        );
+        
       } catch (error) {
         console.error('Failed to send message:', error);
     
         // Optionally mark message as failed
-        // setChatMessages(prev => prev.map(msg => 
-        //   msg.id === tempId ? { ...msg, sending: false, failed: true } : msg
-        // ));
+        setChatMessages(prev =>
+          prev.map(msg =>
+            msg.id === tempId ? { ...msg, sending: false, failed: true, errorMessage: error.response?.data || "Unknown error" } : msg
+          )
+        );
+    
+        // Optionally, you can show a user-friendly message (e.g. toast or alert)
+        alert("Message sending failed. Please try again.");
       }
     };
+    
     
 
 
@@ -236,266 +350,7 @@ export default function Case() {
     };
 
     return (
-        // <div className={`flex flex-col h-screen min-h-screen p-6 transition-colors duration-300 ${BgColor}`}>
-
-        //     {/* Header */}
-        //     <header className="flex items-center justify-between p-4 border-b">
-        //         <div className="flex items-center gap-4">
-        //             <Link to="/common">
-        //                 <Button variant="ghost" size="icon" className="rounded-full">
-        //                     <ArrowLeft className="w-5 h-5" />
-        //                 </Button>
-        //             </Link>
-        //             <div className="flex items-center">
-        //                 <h1 className="text-xl font-semibold">{caseName}</h1>
-        //             </div>
-        //         </div>
-
-        //         <div className="flex items-center gap-2">
-        //             <Dialog>
-        //                 <DialogTrigger asChild>
-        //                     <Button variant="outline" size="sm">
-        //                     <Share className="w-4 h-4 mr-2" />
-        //                     Share
-        //                     </Button>
-        //                 </DialogTrigger>
-        //                 <DialogContent>
-        //                     <DialogHeader>
-        //                     <DialogTitle>Share this case</DialogTitle>
-        //                     <DialogDescription>
-        //                         Invite others to collaborate on this forensic investigation.
-        //                     </DialogDescription>
-        //                     </DialogHeader>
-        //                     <div className="grid gap-4 py-4">
-        //                     <div className="grid gap-2">
-        //                         <Input placeholder="Enter email address" />
-        //                         <Button size="sm" className="w-full">Send invitation</Button>
-        //                     </div>
-        //                     <Separator />
-        //                     <div>
-        //                         <p className="text-sm font-medium mb-2">Share link</p>
-        //                         <div className="flex items-center gap-2">
-        //                         <Input value={window.location.href} readOnly />
-        //                         <Button
-        //                             variant="outline"
-        //                             size="sm"
-        //                             onClick={() => {
-        //                             navigator.clipboard.writeText(window.location.href);
-        //                             toast({
-        //                                 title: "Link copied",
-        //                                 description: "Case link copied to clipboard.",
-        //                             });
-        //                             }}
-        //                         >
-        //                             Copy
-        //                         </Button>
-        //                         </div>
-        //                     </div>
-        //                     </div>
-        //                 </DialogContent>
-        //                 </Dialog>
-        //                 <DropdownMenu>
-        //                     <DropdownMenuTrigger asChild>
-        //                     <Button variant="outline" size="sm">
-        //                         <Settings className="w-4 h-4" />
-        //                     </Button>
-        //                     </DropdownMenuTrigger>
-        //                     <DropdownMenuContent align="end" className="w-40">
-        //                     <DropdownMenuLabel>Background</DropdownMenuLabel>
-        //                     <DropdownMenuSeparator />
-        //                     <DropdownMenuItem onClick={() => setBgColor("bg-white")}>
-        //                         Light
-        //                     </DropdownMenuItem>
-        //                     <DropdownMenuItem onClick={() => setBgColor("bg-gray-900 text-white")}>
-        //                         Dark
-        //                     </DropdownMenuItem>
-        //                     <DropdownMenuItem onClick={() => setBgColor("bg-blue-50")}>
-        //                         Soft Blue
-        //                     </DropdownMenuItem>
-        //                     <DropdownMenuItem onClick={() => setBgColor("bg-yellow-50")}>
-        //                         Cream
-        //                     </DropdownMenuItem>
-        //                     </DropdownMenuContent>
-        //                 </DropdownMenu>
-        //         </div>
-        //     </header>
-        //     <div className="flex flex-1 overflow-hidden">
-        //         {/* Sources Panel */}
-        //         <div className={`w-96 border-r overflow-y-auto flex flex-col ${activeTab === "sources" ? "block" : "hidden md:block"}`}>
-        //             <div className="flex items-center justify-between p-4 border-b">
-        //                 <h2 className="font-semibold">Evidence Images</h2>
-        //                 <Button variant="ghost" size="icon">
-        //                     <LayoutGrid className="w-4 h-4" />
-        //                 </Button>
-        //             </div>
-
-        //             <div className="p-3">
-        //                 <Input
-        //                     id="file-upload"
-        //                     type="file"
-        //                     className="hidden"
-        //                     accept="image/*"
-        //                     multiple
-        //                     ref={fileInputRef}
-        //                     onChange={handleFileUpload}
-        //                 />
-        //             </div>
-
-        //             {uploadedImages.length === 0 ? (
-        //                 <div className="flex flex-col items-center justify-center flex-1 p-8 text-center text-muted-foreground">
-        //                     <div className="p-6 bg-muted/50 rounded-lg mb-6">
-        //                         <FileUp className="w-12 h-12" />
-        //                     </div>
-        //                     <h3 className="font-medium text-lg">Upload evidence images</h3>
-        //                     <p className="text-sm mt-2 max-w-xs mb-8">
-        //                         Upload images from the crime scene or other evidence to analyze patterns and generate insights.
-        //                     </p>
-
-        //                     <Button variant="default" className="gap-1" onClick={triggerFileUpload}>
-        //                         <UploadCloud className="h-4 w-4 mr-1" />
-        //                         Upload images
-        //                     </Button>
-        //                 </div>
-        //             ) : (
-        //                 <div className="p-4 space-y-3">
-        //                     {uploadedImages.map((src, index) => (
-        //                         <div
-        //                             key={index}
-        //                             className={`relative group rounded-md border overflow-hidden flex items-center p-2 hover:bg-accent cursor-pointer ${selectedImage === src ? 'bg-accent/60' : ''}`}
-        //                             onClick={() => handleImageClick(src)}
-        //                         >
-        //                             <div className="h-16 w-16 rounded overflow-hidden mr-3 flex-shrink-0">
-        //                                 <img
-        //                                     src={src}
-        //                                     alt={`Evidence ${index + 1}`}
-        //                                     className="h-full w-full object-cover"
-        //                                 />
-        //                             </div>
-        //                             <div className="flex-1 min-w-0">
-        //                                 <p className="font-medium truncate">Evidence image {index + 1}</p>
-        //                                 <p className="text-xs text-muted-foreground">Image • Added {new Date().toLocaleDateString()}</p>
-        //                             </div>
-        //                             <Button
-        //                                 variant="ghost"
-        //                                 size="icon"
-        //                                 className="opacity-0 group-hover:opacity-100"
-        //                                 onClick={(e) => {
-        //                                     e.stopPropagation();
-        //                                     handleDeleteImage(index);
-        //                                 }}
-        //                             >
-        //                                 <Trash2 className="h-4 w-4" />
-        //                             </Button>
-        //                         </div>
-        //                     ))}
-
-        //                     <div className="pt-3">
-        //                         {uploadedImages.length > 0 && (
-        //                             <Button
-        //                                 className="w-full"
-        //                                 onClick={analyzeEvidence}
-        //                                 disabled={isAnalyzing}
-        //                             >
-        //                                 {isAnalyzing ? (
-        //                                     <>
-        //                                         <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
-        //                                         Analyzing...
-        //                                     </>
-        //                                 ) : (
-        //                                     <>
-        //                                         <Microscope className="h-4 w-4 mr-2" />
-        //                                         Analyze Evidence
-        //                                     </>
-        //                                 )}
-        //                             </Button>
-        //                         )}
-        //                     </div>
-        //                 </div>
-        //             )}
-
-        //             {/* Upload button at the bottom */}
-        //             <div className="mt-auto p-4 border-t">
-        //                 <div className="flex items-center bg-muted/50 rounded-lg p-3">
-        //                     <div className="flex-1">
-        //                         <p className="text-sm font-medium">Evidence summary</p>
-        //                         <p className="text-xs text-muted-foreground">{uploadedImages.length} image{uploadedImages.length !== 1 ? 's' : ''}</p>
-        //                     </div>
-        //                     <Button size="sm" className="rounded-full w-8 h-8 p-0 flex-shrink-0" onClick={triggerFileUpload}>
-        //                         <Plus className="h-4 w-4" />
-        //                     </Button>
-        //                 </div>
-        //             </div>
-        //         </div>
-
-        //         {/* <div className="flex-1 flex flex-col overflow-y-auto max-h-screen">
-        //             <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white rounded-t-md">
-        //                 <h2 className="font-semibold text-lg">{officer}</h2>
-        //             </div>
-
-        //             <div className="flex-1 flex flex-col p-4 bg-gray-100 shadow-lg rounded-b-md overflow-y-auto max-h-[calc(100vh-150px)]">
-        //                 <div className="flex-1 overflow-y-auto space-y-4">
-        //                     {chatMessages.map((msg, index) => (
-        //                         <div key={index} className={`flex ${msg.isBot ? "justify-start" : "justify-end"}`}>
-        //                             <div className={`max-w-xs p-3 rounded-lg ${msg.isBot ? "bg-muted" : "bg-primary text-white"}`}>
-        //                                 <p className="text-sm">{msg.text}</p>
-        //                             </div>
-        //                         </div>
-        //                     ))}
-        //                 </div>
-
-        //                 <div className="flex items-center space-x-2 p-4 border-t">
-        //                     <input
-        //                         type="text"
-        //                         className="flex-1 p-2 border rounded-md"
-        //                         placeholder="Type a message..."
-        //                         value={messageInput}
-        //                         onChange={(e) => setMessageInput(e.target.value)}
-        //                     />
-        //                     <button
-        //                         className="px-4 py-2 bg-blue-500 text-white rounded-md"
-        //                         onClick={sendMessage}
-        //                         disabled={messageInput.trim() === ""}
-        //                     >
-        //                         Send
-        //                     </button>
-        //                 </div>
-        //             </div>
-        //         </div> */}
-
-
-
-
-
-
-
-        //     </div>
-        //     {/* Mobile Navigation */}
-        //     <div className="md:hidden border-t">
-        //         <div className="grid grid-cols-3 divide-x">
-        //             <button
-        //                 className={`flex flex-col items-center py-3 ${activeTab === "sources" ? "text-primary" : "text-muted-foreground"}`}
-        //                 onClick={() => setActiveTab("sources")}
-        //             >
-        //                 <Image className="h-5 w-5 mb-1" />
-        //                 <span className="text-xs">Images</span>
-        //             </button>
-        //             <button
-        //                 className={`flex flex-col items-center py-3 ${activeTab === "chat" ? "text-primary" : "text-muted-foreground"}`}
-        //                 onClick={() => setActiveTab("chat")}
-        //             >
-        //                 <Eye className="h-5 w-5 mb-1" />
-        //                 <span className="text-xs">Preview</span>
-        //             </button>
-        //             <button
-        //                 className={`flex flex-col items-center py-3 ${activeTab === "studio" ? "text-primary" : "text-muted-foreground"}`}
-        //                 onClick={() => setActiveTab("studio")}
-        //             >
-        //                 <Microscope className="h-5 w-5 mb-1" />
-        //                 <span className="text-xs">Tools</span>
-        //             </button>
-        //         </div>
-        //     </div>
-        // </div>
+        
 <div className={`flex flex-col min-h-screen transition-colors duration-300 ${BgColor}`}>
 
 <header className="flex flex-wrap items-center justify-between p-4 border-b gap-2">
@@ -536,7 +391,6 @@ export default function Case() {
 {/* Main Content */}
 <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
 
-  {/* Sidebar */}
   <div className={`w-full md:w-96 border-r overflow-y-auto ${activeTab === "sources" ? "block" : "hidden md:block"}`}>
     <div className="flex items-center justify-between p-4 border-b">
       <h2 className="font-semibold">Evidence Images</h2>
@@ -545,7 +399,6 @@ export default function Case() {
       </Button>
     </div>
 
-    {/* Upload Images */}
     <div className="p-3">
       <Input
         id="file-upload"
@@ -559,70 +412,39 @@ export default function Case() {
     </div>
 
     {uploadedImages.length === 0 ? (
-      <div className="flex flex-col items-center justify-center flex-1 p-8 text-center text-muted-foreground">
-        <div className="p-6 bg-muted/50 rounded-lg mb-6">
-          <FileUp className="w-12 h-12" />
-        </div>
-        <h3 className="font-medium text-lg">Upload evidence images</h3>
-        <p className="text-sm mt-2 max-w-xs mb-8">
-          Upload images from the crime scene or other evidence to analyze patterns and generate insights.
-        </p>
-        <Button variant="default" className="gap-1" onClick={triggerFileUpload}>
-          <UploadCloud className="h-4 w-4 mr-1" />
-          Upload images
-        </Button>
-      </div>
-    ) : (
-      <div className="p-4 space-y-3">
-        {uploadedImages.map((src, index) => (
-          <div
-            key={index}
-            className={`relative group rounded-md border overflow-hidden flex items-center p-2 hover:bg-accent cursor-pointer ${selectedImage === src ? 'bg-accent/60' : ''}`}
-            onClick={() => handleImageClick(src)}
-          >
-            <div className="h-16 w-16 rounded overflow-hidden mr-3 flex-shrink-0">
-              <img src={src} alt={`Evidence ${index + 1}`} className="h-full w-full object-cover" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium truncate">Evidence image {index + 1}</p>
-              <p className="text-xs text-muted-foreground">Image • Added {new Date().toLocaleDateString()}</p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="opacity-0 group-hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDeleteImage(index);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+        <div className="flex flex-col items-center justify-center flex-1 p-8 text-center text-muted-foreground">
+          <div className="p-6 bg-muted/50 rounded-lg mb-6">
+            {/* Placeholder for file upload icon */}
           </div>
-        ))}
-
-        {/* Analyze Button */}
-        <div className="pt-3">
-          {uploadedImages.length > 0 && (
-            <Button className="w-full" onClick={analyzeEvidence} disabled={isAnalyzing}>
-              {isAnalyzing ? (
-                <>
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Microscope className="h-4 w-4 mr-2" />
-                  Analyze Evidence
-                </>
-              )}
-            </Button>
-          )}
+          <h3 className="font-medium text-lg">Upload evidence images</h3>
+          <p className="text-sm mt-2 max-w-xs mb-8">
+            Upload images from the crime scene or other evidence to analyze patterns and generate insights.
+          </p>
+          <Button variant="default" className="gap-1" onClick={triggerFileUpload}>
+            {/* Upload icon */}
+            Upload images
+          </Button>
         </div>
+      ) : (
+        <div className="p-4 space-y-3">
+          {uploadedImages.map((src, index) => (
+            <div
+              key={index}
+              className={`relative group rounded-md border overflow-hidden flex items-center p-2 hover:bg-accent cursor-pointer ${selectedImage === src ? 'bg-accent/60' : ''}`}
+            >
+              <div className="h-16 w-16 rounded overflow-hidden mr-3 flex-shrink-0">
+                <img src={src} alt={`Evidence ${index + 1}`} className="h-full w-full object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">Evidence image {index + 1}</p>
+                <p className="text-xs text-muted-foreground">Image • Added {new Date().toLocaleDateString()}</p>
+              </div>
+            </div>
+          ))}
+        
       </div>
     )}
 
-    {/* Evidence Summary */}
     <div className="mt-auto p-4 border-t">
       <div className="flex items-center bg-muted/50 rounded-lg p-3">
         <div className="flex-1">
@@ -732,7 +554,6 @@ function Customize({ className }: { className?: string }) {
     );
 }
 
-function animateTyping(summary: any) {
+function animateTyping(summary) {
   throw new Error("Function not implemented.");
 }
-

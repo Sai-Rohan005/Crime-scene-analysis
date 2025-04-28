@@ -1269,13 +1269,13 @@ export default function CitizenDashboard() {
 
                 <CardContent>
                   <div className="flex items-center text-sm text-muted-foreground mb-1">
-                    <FileText className="h-4 w-4 mr-1" /> Filed on {formatDate(c.date)}
+                    <FileText className="h-4 w-4 mr-1" /> Filed on {formatDate(c.datetime)}
                   </div>
                 </CardContent>
 
                 <CardFooter className="text-xs text-muted-foreground flex justify-end">
                   <div className="flex items-center">
-                    <Clock className="h-3 w-3 mr-1" /> Updated {formatDate(c.lastUpdated || c.date)}
+                    <Clock className="h-3 w-3 mr-1" /> Updated {formatDate(c.lastUpdated || c.datetime)}
                   </div>
                 </CardFooter>
               </Card>

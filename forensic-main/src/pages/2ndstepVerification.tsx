@@ -60,8 +60,11 @@ export default function OTPVerification() {
 
     try {
       const response = await axios.post("http://localhost:5500/verify-otp", {
-        otp,
-      });
+        otp
+      },{
+        headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken")}` },
+      }
+    );
 
       if (response.data.status === 200) {
         toast({
@@ -70,6 +73,14 @@ export default function OTPVerification() {
         });
         setTimeout(() => {
           navigate("/dashboard");
+        }, 1000);
+      }else if(response.data.status===210){
+        toast({
+          title: "Verified",
+          description: response.data.message,
+        });
+        setTimeout(() => {
+          navigate("/common");
         }, 1000);
       }
       else{

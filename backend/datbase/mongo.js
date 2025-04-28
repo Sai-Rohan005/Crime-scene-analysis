@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
   username: String,
   createdon: Date,
   profile: String,
+  role:String,
   reports: [String]
 });
 
