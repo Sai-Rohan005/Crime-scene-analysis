@@ -50,7 +50,15 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState("desc");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
-  const [formData, setFormData] = useState({ title: "", type: "" });
+  const [formData, setFormData] = useState({
+      title: "",
+      type: "",
+      description: "",
+      location: "",
+      datetime: formatDateTimeLocal(new Date()),
+      suspect: "",
+      evidence: "",
+    });
   const [loading, setLoading] = useState(false);
   const [displayName,setdisplayName]=useState("");
 
@@ -97,6 +105,7 @@ export default function Dashboard() {
             Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
           },
         });
+        console.log(res);
         if (res.data.status === 200) {
           console.log(res.data.data);
           const mail = res.data.data[0].email;
@@ -109,20 +118,20 @@ export default function Dashboard() {
           // Normalize data before setting state
           setCases(res.data.data.map(c => ({
             _id: c._id,
-            title: c.caseTitle,
-            type: c.caseType,
+            title: c.title,
+            type: c.type,
             status: c.status || "New",
-            date: c.createdAt || new Date().toISOString(),
+            date: c.datetime || new Date().toISOString(),
             lastUpdated: c.updatedAt || new Date().toISOString(),
             
           })));
         }
       } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to fetch cases. Please try again later.",
-        });
+        // toast({
+        //   variant: "destructive",
+        //   title: "Error",
+        //   description: "Failed to fetch cases. Please try again later.",
+        // });
         console.log(error);
       } finally {
         setLoading(false);
@@ -183,7 +192,13 @@ export default function Dashboard() {
         };
 
         setCases([newCase, ...cases]);
-        setFormData({ title: "", type: "" });
+        setFormData({ title: "",
+          type: "",
+          description: "",
+          location: "",
+          datetime: formatDateTimeLocal(new Date()),
+          suspect: "",
+          evidence: "",});
         setIsDialogOpen(false);
 
         toast({
@@ -280,43 +295,93 @@ export default function Dashboard() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create New Case</DialogTitle>
-                    <DialogDescription>Enter the details for your new investigation case.</DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleCreateCase}>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="case-title">Case Title</Label>
-                        <Input
-                          type="text"
-                          id="case-title"
-                          placeholder="Enter case title"
-                          name="title"
-                          value={formData.title}
-                          onChange={newCaseDetails}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="case-type">Case Type</Label>
-                        <Input
-                          id="case-type"
-                          placeholder="E.g., Homicide, Robbery, Burglary"
-                          name="type"
-                          value={formData.type}
-                          onChange={newCaseDetails}
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={!formData.title || !formData.type || loading}>
-                        {loading ? "Creating..." : "Create Case"}
-                      </Button>
-                    </DialogFooter>
-                  </form>
+                              <DialogHeader>
+                                <DialogTitle>New Case</DialogTitle>
+                                <DialogDescription>Fill in the details of the issue.</DialogDescription>
+                              </DialogHeader>
+                
+                              <form onSubmit={handleCreateCase}>
+                                <div className="grid gap-4 py-4">
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="complaint-title">Case Title</Label>
+                                    <Input
+                                      type="text"
+                                      id="complaint-title"
+                                      placeholder="E.g., Phone Theft"
+                                      name="title"
+                                      value={formData.title}
+                                      onChange={newCaseDetails}
+                                    />
+                                  </div>
+                
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="complaint-type">Complaint Category</Label>
+                                    <Input
+                                      id="complaint-type"
+                                      placeholder="E.g., Theft, Harassment"
+                                      name="type"
+                                      value={formData.type}
+                                      onChange={newCaseDetails}
+                                    />
+                                  </div>
+                
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="description">Description</Label>
+                                    <Input
+                                      id="description"
+                                      placeholder="Briefly describe the incident"
+                                      name="description"
+                                      value={formData.description}
+                                      onChange={newCaseDetails}
+                                    />
+                                  </div>
+                
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="location">Location of Incident</Label>
+                                    <Input
+                                      id="location"
+                                      placeholder="E.g., Near City Mall, 5th Street"
+                                      name="location"
+                                      value={formData.location}
+                                      onChange={newCaseDetails}
+                                    />
+                                  </div>
+                
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="datetime">Date & Time</Label>
+                                    <Input
+                                      type="datetime-local"
+                                      id="datetime"
+                                      name="datetime"
+                                      value={formData.datetime}
+                                      onChange={newCaseDetails}
+                                    />
+                                  </div>
+                
+                                  <div className="grid gap-2">
+                                    <Label htmlFor="suspect">Suspect Details (Optional)</Label>
+                                    <Input
+                                      id="suspect"
+                                      placeholder="E.g., Male, 6ft, wearing black hoodie"
+                                      name="suspect"
+                                      value={formData.suspect}
+                                      onChange={newCaseDetails}
+                                    />
+                                  </div>
+                                </div>
+                
+                                <DialogFooter>
+                                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    type="submit"
+                                    disabled={!formData.title || !formData.type || loading}
+                                  >
+                                    {loading ? "Filing..." : "Submit Complaint"}
+                                  </Button>
+                                </DialogFooter>
+                              </form>
                 </DialogContent>
               </Dialog>
             </div>
@@ -395,4 +460,14 @@ function formatDate(dateString: string): string {
     day: "numeric",
   };
   return new Date(dateString).toLocaleDateString(undefined, options);
+}
+function formatDateTimeLocal(date) {
+  const d = new Date(date);
+  const pad = (n) => n.toString().padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }

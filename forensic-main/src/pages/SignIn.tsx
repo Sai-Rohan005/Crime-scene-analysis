@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,25 +10,30 @@ import { Footer } from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 
-export default function SignIn() {
+export default function SignInAndVerify() {
   const [isLoading, setIsLoading] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [isSignIn, setIsSignIn] = useState(true); // Track whether to show SignIn or OTPVerification
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+    login:true
   });
 
-  const [message, setMessage] = useState("");
-  const [isSuccess, setIsSuccess] = useState(false);
+  // useEffect(() => {
+  //   const allowed = sessionStorage.getItem("authToken");
 
-  // 🔐 Cleanup any leftover localStorage token
-  useEffect(() => {
-    localStorage.removeItem("token");
-  }, []);
+  //   if (!allowed && !isSignIn) {
+  //     navigate("/404"); // Redirect to a "Page Not Found" if not authenticated
+  //   }
+  // }, [navigate, isSignIn]);
 
-  const handleChange = (e) => {
+  // SignIn Handlers
+  const handleSignInChange = (e) => {
     const { name, value } = e.target;
     setFormData((prevData) => ({
       ...prevData,
@@ -35,66 +41,121 @@ export default function SignIn() {
     }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSignInSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setMessage("");
-    setIsSuccess(false);
 
     try {
       const response = await axios.post("http://localhost:5500/login", formData);
 
       if (response.status === 200 && response.data.token) {
-        const token = response.data.token;
-
-        // ✅ Store token in sessionStorage
-        sessionStorage.setItem("authToken", token);
-
-        toast({
-          title: "Welcome back",
-          description: response.data.message,
-        });
-
-        
-        navigate('/dashboard');
-        // navigate("/verification");
-        
+        setIsSignIn(false); 
       }
     } catch (error) {
       if (error.response) {
         const { status, message } = error.response.data;
-        if (status === 410) {
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Account Doesnot exist with this mail",
-          });
-          setTimeout(() => navigate("/signup"), 1500);
-        } else if (status === 401) {
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description: message,
-          });
-        } else {
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description: message,
-          });
-        }
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: status === 410
+            ? "Account does not exist with this email"
+            : message,
+        });
+        setTimeout(() => {
+          if (status === 410) navigate("/signup");
+        }, 1500);
       } else {
         toast({
           variant: "destructive",
           title: "Error",
           description: "Network or server error",
         });
-        
       }
     } finally {
       setIsLoading(false);
     }
   };
+
+  // OTP Verification Handlers
+  const handleOtpChange = (e) => {
+    setOtp(e.target.value);
+  };
+
+  const resendOtp = async () => {
+    try {
+      formData.login=false;
+      const resend = await axios.post(
+        "http://localhost:5500/login",
+        {formData}
+      );
+      if (resend.data.status === 200) {
+        toast({
+          title: "Code sent",
+          description: resend.data.message,
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: resend.data.message,
+        });
+      }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: err?.response?.data?.message || err.message || "Something went wrong",
+      });
+    }
+  };
+
+  const handleOtpSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+  
+    try {
+      const email = formData.email;
+      const response = await axios.post(
+        "http://localhost:5500/verify-otp",
+        { email, otp }
+      );
+      console.log(response);
+  
+      const token = response.data.token;
+      if (token) {
+        sessionStorage.setItem("authToken", token);
+      }
+  
+      if (response.data.status === 200) {
+        toast({
+          title: "Verified",
+          description: response.data.message,
+        });
+        setTimeout(() => navigate("/dashboard"), 1000);
+      } else if (response.data.status === 210) {
+        toast({
+          title: "Verified",
+          description: response.data.message,
+        });
+        setTimeout(() => navigate("/common"), 1000);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: response.data.message,
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Invalid OTP",
+        description: error?.response?.data?.message || "Something went wrong",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -110,83 +171,115 @@ export default function SignIn() {
         </Link>
 
         <div className="mx-auto w-full max-w-md space-y-6">
-          <div className="flex flex-col space-y-2 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-              <Fingerprint className="h-8 w-8 text-forensic" />
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Sign in to CrimeSleuth AI
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Enter your email below to sign in to your account
-            </p>
-          </div>
-
-          <div className="grid gap-6">
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    placeholder="name@example.com"
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    autoCorrect="off"
-                    required
-                  />
+          {isSignIn ? (
+            <>
+              <div className="flex flex-col space-y-2 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                  <Fingerprint className="h-8 w-8 text-forensic" />
                 </div>
-                <div className="grid gap-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
-                    <Link
-                      to="/forgot-password"
-                      className="text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Forgot password?
-                    </Link>
+                <h1 className="text-2xl font-semibold tracking-tight">Sign in to CrimeSleuth AI</h1>
+                <p className="text-sm text-muted-foreground">
+                  Enter your email below to sign in to your account
+                </p>
+              </div>
+
+              <div className="grid gap-6">
+                <form onSubmit={handleSignInSubmit}>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        placeholder="name@example.com"
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleSignInChange}
+                        autoCapitalize="none"
+                        autoComplete="email"
+                        autoCorrect="off"
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="password">Password</Label>
+                        <Link
+                          to="/forgot-password"
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Forgot password?
+                        </Link>
+                      </div>
+                      <Input
+                        id="password"
+                        type="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleSignInChange}
+                        autoCapitalize="none"
+                        autoComplete="current-password"
+                        autoCorrect="off"
+                        required
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading ? "Signing in..." : "Sign in"}
+                    </Button>
                   </div>
-                  <Input
-                    id="password"
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    autoCapitalize="none"
-                    autoComplete="current-password"
-                    autoCorrect="off"
-                    required
-                  />
+                </form>
+
+                <div className="text-center text-sm">
+                  Don't have an account?{" "}
+                  <Link to="/signup" className="font-medium text-primary hover:underline">
+                    Sign up
+                  </Link>
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "Signing in..." : "Sign in"}
-                </Button>
               </div>
-            </form>
-
-            <div className="text-center text-sm">
-              Don&apos;t have an account?{" "}
-              <Link
-                to="/signup"
-                className="font-medium text-primary hover:underline"
-              >
-                Sign up
-              </Link>
-            </div>
-
-            {message && (
-              <div
-                className="text-center text-sm"
-                style={{ color: isSuccess ? "green" : "red" }}
-              >
-                {message}
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col space-y-2 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                  <Fingerprint className="h-8 w-8 text-forensic" />
+                </div>
+                <h1 className="text-2xl font-semibold tracking-tight">Verify OTP</h1>
+                <p className="text-sm text-muted-foreground">Enter the one-time password sent to your email</p>
               </div>
-            )}
-          </div>
+
+              <div className="grid gap-6">
+                <form onSubmit={handleOtpSubmit}>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="otp">OTP</Label>
+                      <Input
+                        id="otp"
+                        name="otp"
+                        placeholder="Enter 6-digit OTP"
+                        value={otp}
+                        onChange={handleOtpChange}
+                        maxLength={6}
+                        required
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading ? "Verifying..." : "Verify"}
+                    </Button>
+                  </div>
+                </form>
+
+                <div className="text-center text-sm">
+                  Didn't receive the code?{" "}
+                  <button
+                    onClick={resendOtp}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    Resend OTP
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

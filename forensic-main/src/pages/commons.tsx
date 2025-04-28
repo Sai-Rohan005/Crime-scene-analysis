@@ -576,10 +576,10 @@ export default function CitizenDashboard() {
       const response = await axios.post("http://localhost:5500/common_cases", formData, {
         headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken")}` },
       });
-
+      console.log(response);
       if (response?.data?.status === 200) {
         const newComplaint = {
-          _id: `complaint-${String(complaints.length + 1).padStart(3, "0")}`,
+          _id: response.data.id,
           title: formData.title,
           date: new Date().toISOString(),
           status: "New",

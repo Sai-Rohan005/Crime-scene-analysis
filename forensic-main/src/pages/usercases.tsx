@@ -46,8 +46,11 @@ import {
   Send
 
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
+
+
 
 export default function Case() {
     const { caseId } = useParams();
@@ -63,6 +66,10 @@ export default function Case() {
     const { toast } = useToast();
     const isMobile = useIsMobile();
     const [BgColor,setBgColor]=useState("bg-white");
+    const token = sessionStorage.getItem('authToken');
+    
+    const decoded = jwtDecode<{ email: string }>(token);
+    
 
     const triggerFileUpload = () => {
         if (fileInputRef.current) {
@@ -70,23 +77,28 @@ export default function Case() {
         }
     };
 
+    const [messages, setMessages] = useState([
+      { from: "other", text: "Hello! How can I help you today?" },
+    ]);
+    
+  const [chatMessages, setChatMessages] = useState<{
+    timestamp: ReactNode;
+    id: number; text: string, isBot: boolean 
+}[]>([]);
+  const [messageInput, setMessageInput] = useState('');
+
+
     useEffect(() => {
       const fetchImages = async () => {
         try {
           // Fetch images for the given caseId
           const response = await axios.get(`http://localhost:5500/get_case_images/${caseId}`);
-          console.log("Response from backend:", response); // Log the entire response
+          // console.log("Response from backend:", response); // Log the entire response
     
           if (response.data && Array.isArray(response.data.images)) {
             const { images } = response.data; // Get images array from response
             const imageUrls = images.map((image) => `http://localhost:5500/images/${image.image_id}`);
             setUploadedImages(imageUrls); // Store the image URLs in the state
-          } else {
-            toast({
-              variant: "destructive",
-              title: "Fetching Files",
-              description: "No images found for this case."
-            });
           }
         } catch (err) {
           console.log("Error fetching images:", err);
@@ -96,6 +108,25 @@ export default function Case() {
             description: "There was an error while fetching images."
           });
         }
+        try {
+          const getmsg=await axios.get(`http://localhost:5500/conversations/${caseId}`);
+          // console.log(getmsg);
+          const updatedMessages = getmsg.data.messages.map(msg => ({
+            ...msg,
+            isBot: msg.senderId === decoded.email
+          }));
+          const username = getmsg.data.messages[0].senderId.split('@')[0];
+          const formattedName = username.charAt(0).toUpperCase() + username.slice(1);
+          setofficer(formattedName);
+          // console.log(updatedMessages);
+          
+          setChatMessages(updatedMessages);
+
+        }catch(err){
+          console.log(err);
+        }
+
+
       };
     
       if (caseId) {
@@ -279,60 +310,54 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         });
       }
     };
-    const [messages, setMessages] = useState([
-        { from: "other", text: "Hello! How can I help you today?" },
-      ]);
-      
-    const [chatMessages, setChatMessages] = useState<{
-      id: number; text: string, isBot: boolean 
-}[]>([]);
-    const [messageInput, setMessageInput] = useState('');
-
-    
+  
    
     const sendMessage = async () => {
       if (!messageInput.trim()) return;
     
       const currentMessage = messageInput;
+      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setMessageInput('');
     
       // Optimistically show the message
       const tempId = Date.now(); // unique id for temp tracking
-      setChatMessages(prev => [...prev, { id: tempId, text: currentMessage, isBot: false, sending: true }]);
+      // setChatMessages((prev) => [
+      //   ...prev,
+      //   { id: tempId, text: currentMessage, isBot: false, sending: true, timestamp }
+      // ]);
     
       try {
-        const respchat = await axios.post(`http://localhost:5500/message/${caseId}`, {
-          text: currentMessage
-        }, {
-          headers: {
-            Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
-          },
+        // Send the message to the server
+        const response = await axios.post(`http://localhost:5500/messages/${caseId}`, {
+          text: currentMessage,
+          senderId: ""  // Handle senderId logic as per your requirement
         });
     
-        console.log('Response:', respchat);
-    
-        // After success, mark message as sent
-        setChatMessages(prev =>
-          prev.map(msg =>
-            msg.id === tempId ? { ...msg, sending: false, sent: true } : msg
+        // Mark message as successfully sent (remove "sending" flag)
+        setChatMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === tempId ? { ...msg, sending: false, failed: false, timestamp } : msg
           )
         );
-        
+    
+        // Optionally add the server's response (if it includes the full message data or metadata) to the chat
+        setChatMessages((prev) => [
+          ...prev,
+          { id: response.data.messageId, text: currentMessage, isBot: false, sending: false, timestamp }
+        ]);
       } catch (error) {
         console.error('Failed to send message:', error);
-    
-        // Optionally mark message as failed
-        setChatMessages(prev =>
-          prev.map(msg =>
-            msg.id === tempId ? { ...msg, sending: false, failed: true, errorMessage: error.response?.data || "Unknown error" } : msg
+        setChatMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === tempId ? { ...msg, sending: false, failed: true, timestamp } : msg
           )
         );
-    
-        // Optionally, you can show a user-friendly message (e.g. toast or alert)
-        alert("Message sending failed. Please try again.");
       }
     };
     
+    
+
+
     
 
 
@@ -377,13 +402,28 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 
     {/* Settings Dropdown */}
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="whitespace-nowrap">
-          <Settings className="w-4 h-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent> {/* your settings menu code */} </DropdownMenuContent>
-    </DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                                <Settings className="w-4 h-4" />
+                            </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuLabel>Background</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setBgColor("bg-white")}>
+                                Light
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setBgColor("bg-gray-900 text-white")}>
+                                Dark
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setBgColor("bg-blue-50")}>
+                                Soft Blue
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setBgColor("bg-yellow-50")}>
+                                Cream
+                            </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
   </div>
 </header>
 

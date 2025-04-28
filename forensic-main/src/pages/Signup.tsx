@@ -56,8 +56,9 @@ export default function SignIn() {
       setIsLoading(true);
       const responseback=await axios.post('http://localhost:5500/signup',formData);
       if(responseback){
-        console.log(responseback);
+        // console.log(responseback);
         if(responseback.data.status==200){
+          
           toast({
             title: "Account Created",
             description: "Sucessfull",
