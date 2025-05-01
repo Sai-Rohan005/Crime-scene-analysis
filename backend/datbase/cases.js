@@ -9,6 +9,7 @@ const caseSchema = new mongoose.Schema({
   suspect: String,
   evidence: String,
   datetime: Date,
+  officer:String,
   images: [
     {
       image_id: String,

@@ -1,9 +1,49 @@
 
 import { Button } from "@/components/ui/button";
+import axios from "axios";
 import { FileText, ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 export function Hero() {
+  const navigate=useNavigate();
+  const[isLoggedIn,setIsLoggedIn]=useState(false);
+  const [Roles,setRoles]=useState("");
+  useEffect(()=>{
+    const islogin = async () => {
+      try {
+        const token = sessionStorage.getItem("authToken");
+        if (token) {
+          // Check login status
+          const resp = await axios.get("http://localhost:5500/checklogin", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+    
+          // console.log("Login status response: ", resp);
+          
+          if (resp.data.status === 200) {
+            // After login is successful, fetch the role
+            const roleResp = await axios.post("http://localhost:5500/role", {}, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+    
+            // console.log("Role response: ", roleResp);
+    
+            if (roleResp.data.role === "police") {
+              setRoles("police");
+            } else {
+              setRoles(null); // Or set a default role value
+            }
+            setIsLoggedIn(true);
+          }
+        }
+      } catch (error) {
+        console.error("Authentication error: ", error);
+      }
+    };
+    
+    islogin();
+  },[])
   return (
     <div className="relative isolate px-6 pt-14 lg:px-8">
       <div
@@ -28,12 +68,22 @@ export function Hero() {
             CrimeSleuth AI harnesses cutting-edge artificial intelligence to transform crime scene investigation. Upload images, analyze evidence, and generate comprehensive reports with unprecedented accuracy and speed.
           </p>
           <div className="mt-10 flex items-center justify-center gap-x-6">
+          {Roles === "police" ? (
             <Link to="/dashboard">
               <Button size="lg" className="gap-1">
                 <FileText className="mr-1 h-5 w-5" />
                 Get Started
               </Button>
             </Link>
+          ) : (
+            <Link to="/common">
+              <Button size="lg" className="gap-1">
+                <FileText className="mr-1 h-5 w-5" />
+                Get Started
+              </Button>
+            </Link>
+          )}
+
             <Link to="/features" className="group flex items-center text-sm font-semibold leading-6">
               Learn more 
               <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />

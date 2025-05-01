@@ -37,6 +37,7 @@ import {
   Image,
   Info,
   LayoutGrid,
+  MessageCircle,
   MessageSquare,
   Microscope,
   Plus,
@@ -46,8 +47,10 @@ import {
   Trash2,
   UploadCloud
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function Case() {
     const { caseId } = useParams();
@@ -61,68 +64,81 @@ export default function Case() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { toast } = useToast();
     const isMobile = useIsMobile();
+    const [canMessage,setcanMessage]=useState(false);
     const [BgColor,setBgColor]=useState("bg-white");
+    const [officer,setofficer]=useState("");
     const [images,setimages]=useState(null);
 
+     const token = sessionStorage.getItem('authToken');
+        
+    const decoded = jwtDecode<{ email: string }>(token);
     const triggerFileUpload = () => {
         if (fileInputRef.current) {
             fileInputRef.current.click();
         }
     };
 
-    // const handleFileUpload = async(e: React.ChangeEvent<HTMLInputElement>) => {
-    //     const files = e.target.files;
-    //     if (!files || files.length === 0) return;
 
-    //     try{
-    //         const imgresp=await axios.post("http://localhost:5500/Upload_images",{files,caseName},
-    //             {
-    //                 headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken")}` },
-    //             }
-
-    //         )
-
-    //     }catch(err){
-    //         toast({
-    //             variant:"destructive",
-    //             title: "Upload failed",
-    //             description: `Uploading image failed`,
-    //         });
-
-    //     }
-
-
-    //     let uploadedCount = 0;
-
-    //     Array.from(files).forEach((file) => {
-    //         if (file.type.startsWith("image/")) {
-    //             const reader = new FileReader();
-    //             reader.onload = (e) => {
-    //                 if (e.target?.result) {
-    //                     setUploadedImages((prev) => [...prev, e.target!.result!.toString()]);
-    //                     uploadedCount++;
-    //                     if (uploadedCount === files.length) {
-    //                         toast({
-    //                             title: "Upload Successful",
-    //                             description: `Uploaded ${files.length} image${files.length !== 1 ? "s" : ""}.`,
-    //                         });
-    //                     }
-    //                 }
-    //             };
-    //             reader.readAsDataURL(file);
-    //         } else {
-    //             toast({
-    //                 title: "Invalid File Type",
-    //                 description: "Only image files are supported at this time.",
-    //                 variant: "destructive",
-    //             });
-    //         }
-    //     });
-
-    //     if (e.target) {
-    //         e.target.value = "";
-    //     }
-    // };
+    useEffect(() => {
+        const fetchmail = async () => {
+          try {
+            const respmail = await axios.get(`http://localhost:5500/filer/${caseId}`);
+            console.log(respmail);
+            if (respmail.data.status === 200) {
+              setcanMessage(true);
+            }
+          } catch (err) {
+            console.error("Failed to fetch filer email:", err);
+          }
+        };
+        const fetchImages = async () => {
+            try {
+              // Fetch images for the given caseId
+              const response = await axios.get(`http://localhost:5500/get_case_images/${caseId}`);
+              // console.log("Response from backend:", response); // Log the entire response
+        
+              if (response.data && Array.isArray(response.data.images)) {
+                const { images } = response.data; // Get images array from response
+                const imageUrls = images.map((image) => `http://localhost:5500/images/${image.image_id}`);
+                setUploadedImages(imageUrls); // Store the image URLs in the state
+              }
+            } catch (err) {
+              console.log("Error fetching images:", err);
+              toast({
+                variant: "destructive",
+                title: "Error Fetching Images",
+                description: "There was an error while fetching images."
+              });
+            }
+            try {
+              const getmsg=await axios.get(`http://localhost:5500/conversations/${caseId}`);
+              console.log(getmsg);
+              const updatedMessages = getmsg.data.messages.map(msg => ({
+                ...msg,
+                isBot: msg.senderId === decoded.email
+              }));
+              const username = getmsg.data.mail.split('@')[0];
+              const formattedName = username.charAt(0).toUpperCase() + username.slice(1);
+              console.log(formattedName);
+              setofficer(formattedName);
+              // console.log(updatedMessages);
+              
+              setChatMessages(updatedMessages);
+    
+            }catch(err){
+              console.log(err);
+            }
+    
+    
+          };
+        
+          if (caseId) {
+            fetchImages(); // Trigger fetch if caseId exists
+          }
+      
+        fetchmail();
+      }, [caseId]);
+      
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -262,6 +278,60 @@ export default function Case() {
         }, 2000);
     };
 
+
+
+    const [messages, setMessages] = useState([
+          { from: "other", text: "Hello! How can I help you today?" },
+        ]);
+        
+      const [chatMessages, setChatMessages] = useState<{
+        timestamp: ReactNode;
+        id: number; text: string, isBot: boolean 
+    }[]>([]);
+      const [messageInput, setMessageInput] = useState('');
+    
+    
+
+    const sendMessage = async () => {
+        if (!messageInput.trim()) return;
+      
+        const currentMessage = messageInput;
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setMessageInput('');
+
+        const tempId = Date.now(); 
+
+      
+        try {
+            
+          const response = await axios.post(`http://localhost:5500/messages/${caseId}`, {
+            text: currentMessage,
+            senderId: ""  
+          });
+      
+          
+          setChatMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === tempId ? { ...msg, sending: false, failed: false, timestamp } : msg
+            )
+          );
+      
+          // Optionally add the server's response (if it includes the full message data or metadata) to the chat
+          setChatMessages((prev) => [
+            ...prev,
+            { id: response.data.messageId, text: currentMessage, isBot: false, sending: false, timestamp }
+          ]);
+        } catch (error) {
+          console.error('Failed to send message:', error);
+          setChatMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === tempId ? { ...msg, sending: false, failed: true, timestamp } : msg
+            )
+          );
+        }
+      };
+
+
     return (
         <div className={`flex flex-col h-screen min-h-screen p-6 transition-colors duration-300 ${BgColor}`}>
             <header className="flex items-center justify-between p-4 border-b">
@@ -277,57 +347,110 @@ export default function Case() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {/* Message Dialog */}
+                    {canMessage && (
+                        <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <MessageCircle className="w-4 h-4 mr-2" />
+                            Message
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
+                            <div className="flex-1 flex flex-col overflow-hidden min-h-0 h-[60vh]">
+                              <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
+                              <DialogTitle>
+                                <span className="text-xl font-semibold">{officer}</span>
+                            </DialogTitle>
+
+                              </div>
+                              <div className="flex-1 flex flex-col p-4 bg-gray-100 overflow-auto min-h-0">
+                                <div className="space-y-4">
+                                  {chatMessages.map((msg, index) => (
+                                    <div key={index} className={`flex ${msg.isBot ? "justify-start" : "justify-end"}`}>
+                                      <div className={`max-w-xs p-3 rounded-lg ${msg.isBot ? "bg-muted" : "bg-primary text-white"}`}>
+                                        <p className="text-sm">{msg.text}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2 p-4 border-t bg-white">
+                                <input
+                                  type="text"
+                                  className="flex-1 p-2 border rounded-md"
+                                  placeholder="Type a message..."
+                                  value={messageInput}
+                                  onChange={(e) => setMessageInput(e.target.value)}
+                                />
+                                <button
+                                  className="px-4 py-2 bg-blue-500 text-white rounded-md"
+                                  onClick={sendMessage}
+                                  disabled={messageInput.trim() === ""}
+                                >
+                                  Send
+                                </button>
+                              </div>
+                            </div>
+                          
+                          
+                        </DialogContent>
+                      </Dialog>
+                      
+                    )}
+
+                    {/* Share Dialog */}
                     <Dialog>
                         <DialogTrigger asChild>
                             <Button variant="outline" size="sm">
-                            <Share className="w-4 h-4 mr-2" />
-                            Share
+                                <Share className="w-4 h-4 mr-2" />
+                                Share
                             </Button>
                         </DialogTrigger>
                         <DialogContent>
                             <DialogHeader>
-                            <DialogTitle>Share this case</DialogTitle>
-                            <DialogDescription>
-                                Invite others to collaborate on this forensic investigation.
-                            </DialogDescription>
+                                <DialogTitle>Share this case</DialogTitle>
+                                <DialogDescription>
+                                    Invite others to collaborate on this forensic investigation.
+                                </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
-                            <div className="grid gap-2">
-                                <Input placeholder="Enter email address" />
-                                <Button size="sm" className="w-full">Send invitation</Button>
-                            </div>
-                            <Separator />
-                            <div>
-                                <p className="text-sm font-medium mb-2">Share link</p>
-                                <div className="flex items-center gap-2">
-                                <Input value={window.location.href} readOnly />
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                    navigator.clipboard.writeText(window.location.href);
-                                    toast({
-                                        title: "Link copied",
-                                        description: "Case link copied to clipboard.",
-                                    });
-                                    }}
-                                >
-                                    Copy
-                                </Button>
+                                <div className="grid gap-2">
+                                    <Input placeholder="Enter email address" />
+                                    <Button size="sm" className="w-full">Send invitation</Button>
+                                </div>
+                                <Separator />
+                                <div>
+                                    <p className="text-sm font-medium mb-2">Share link</p>
+                                    <div className="flex items-center gap-2">
+                                        <Input value={window.location.href} readOnly />
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(window.location.href);
+                                                toast({
+                                                    title: "Link copied",
+                                                    description: "Case link copied to clipboard.",
+                                                });
+                                            }}
+                                        >
+                                            Copy
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
-                            </div>
                         </DialogContent>
-                        </Dialog>
+                    </Dialog>
 
-                        {/* Dropdown for background color */}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                    {/* Background Dropdown */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm">
                                 <Settings className="w-4 h-4" />
                             </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40">
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
                             <DropdownMenuLabel>Background</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => setBgColor("bg-white")}>
@@ -342,9 +465,10 @@ export default function Case() {
                             <DropdownMenuItem onClick={() => setBgColor("bg-yellow-50")}>
                                 Cream
                             </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
+
             </header>
             <div className="flex flex-1 overflow-hidden">
                 <div className={`w-96 border-r overflow-y-auto flex flex-col ${activeTab === "sources" ? "block" : "hidden md:block"}`}>
@@ -367,7 +491,7 @@ export default function Case() {
                         />
                     </div>
 
-                    {uploadedImages.length === 0 ? (
+                    {!canMessage && uploadedImages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center flex-1 p-8 text-center text-muted-foreground">
                             <div className="p-6 bg-muted/50 rounded-lg mb-6">
                                 <FileUp className="w-12 h-12" />
@@ -416,7 +540,7 @@ export default function Case() {
                             ))}
 
                             <div className="pt-3">
-                                {uploadedImages.length > 0 && (
+                                {canMessage && uploadedImages.length > 0 && (
                                     <Button
                                         className="w-full"
                                         onClick={analyzeEvidence}
@@ -438,6 +562,7 @@ export default function Case() {
                             </div>
                         </div>
                     )}
+                    {canMessage==false ? (
                     <div className="mt-auto p-4 border-t">
                         <div className="flex items-center bg-muted/50 rounded-lg p-3">
                             <div className="flex-1">
@@ -449,6 +574,15 @@ export default function Case() {
                             </Button>
                         </div>
                     </div>
+                    ):(
+                        <div className="mt-auto p-4 border-t">
+                        <div className="flex items-center bg-muted/50 rounded-lg p-3">
+                            <div className="flex-1">
+                            </div>
+                        </div>
+                    </div>
+                    )
+                    }
                 </div>
                 <div className={`flex-1 flex flex-col ${activeTab === "chat" ? "block" : "hidden md:block"} overflow-y-auto`}>
                     <div className="flex items-center justify-between p-4 border-b">

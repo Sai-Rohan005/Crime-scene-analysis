@@ -16,6 +16,15 @@ import Profile from "./pages/profile"
 import Common from "./pages/commons"
 import Usercases from "./pages/usercases";
 import Verification from "./pages/2ndstepVerification";
+import {Features} from "./components/Features"
+import { Security } from "./components/Security";
+import { Privacy } from "./components/Privacy";
+import { Roadmap } from "./components/Roadmap";
+import { Pricing } from "./components/Pricing";
+import { Terms } from "./components/Terms";
+import { Testimonials } from "./components/Testimonials";
+import Unauthorized from "./pages/unauthorized";
+
 
 const queryClient = new QueryClient();
 
@@ -34,9 +43,19 @@ const App = () => (
           <Route path="/forgot-password" element={<ForgotPassword/>} />
           <Route path="/Profile" element={<Profile/>} />
           <Route path="/common" element={<Common/>} />
+          <Route path="/features" element={<Features/>} />
+          <Route path="/security" element={<Security/>} />
+          <Route path="/privacy" element={<Privacy/>} />
+          <Route path="/roadmap" element={<Roadmap/>} />
+          <Route path="/pricing" element={<Pricing/>} />
+          <Route path="/terms" element={<Terms/>} />
+          <Route path="/about" element={<Testimonials/>} />
+          
           <Route path="/usercases/:caseId" element={<Usercases/>} />
+          
           <Route path="/verification" element={<Verification/>} />
-
+          <Route path="/unauthorized" element={<Unauthorized/>} />
+        
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

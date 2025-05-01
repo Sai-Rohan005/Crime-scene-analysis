@@ -93,6 +93,30 @@ export default function Dashboard() {
   
 
   useEffect(() => {
+    const islogin=async()=>{
+      try {
+        const token = sessionStorage.getItem("authToken");
+        if (token){
+          const resp = await axios.get("http://localhost:5500/checklogin", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if(resp.data.status === 200) { 
+            const role=await axios.post("http://localhost:5500/role",{},{
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if(role.data.status===200){
+                if(role.data.role!=="police"){
+                  navigate("/unauthorized");
+                }
+            }
+            
+          } 
+        }
+      } catch (error) {
+        console.error("Authentication error: ", error);
+      }
+    }
+    islogin();
     checkLoginStatus();
   }, []);
 
@@ -105,10 +129,10 @@ export default function Dashboard() {
             Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
           },
         });
-        console.log(res);
+        // console.log(res);
         if (res.data.status === 200) {
-          console.log(res.data.data);
-          const mail = res.data.data[0].email;
+          // console.log(res.data.data);
+          const mail = res.data.data[0].officer;
           const username = mail.split('@')[0];
           const formattedName = username.charAt(0).toUpperCase() + username.slice(1);
           setdisplayName(formattedName);

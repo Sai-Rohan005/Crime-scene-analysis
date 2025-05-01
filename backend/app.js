@@ -101,7 +101,29 @@ async function isEmailValid(email) {
   });
 }
 
-async function sendEmail(email, code) {
+async function sendEmail(email, code) {// No selection was provided, so I'll suggest a general improvement to the code
+
+// Add error handling for MongoDB connections
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((error) => console.error('Error connecting to MongoDB:', error));
+
+// Add a middleware to handle uncaught errors
+app.use((err, req, res, next) => {
+  console.error('Uncaught error:', err);
+  res.status(500).json({ status: 500, message: 'Internal server error' });
+});
+
+// Add a middleware to handle unhandled rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled rejection:', reason);
+});
+
+// Add a middleware to handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  process.exit(1);
+});
   try {
     await transporter.sendMail({
       from: process.env.GMAIL_USER,
@@ -109,7 +131,7 @@ async function sendEmail(email, code) {
       subject: 'Your Verification Code',
       text: `Your verification code is: ${code}`,
     });
-    console.log('📧 Code sent to email:', email);
+    // console.log('📧 Code sent to email:', email);
   } catch (error) {
     console.error('❌ Error sending email:', error);
   }
@@ -118,6 +140,40 @@ async function sendEmail(email, code) {
 app.get('/checklogin', authenticateToken, (req, res) => {
   return res.json({ status: 200, message: "User logged in", user: req.user });
 });
+
+app.post('/role', authenticateToken, async (req, res) => {
+  const email = req.user.email;
+  try {
+    // Log to verify if the token is passed correctly
+    // console.log("Email from token: ", email);
+    
+    const getrole = await mongo.findOne({ email: email });
+    // console.log("Fetched role data: ", getrole);
+
+    if (getrole) {
+      return res.json({
+        status: 200,
+        message: "Found mail",
+        role: getrole.role,  
+      });
+    }
+
+    return res.json({
+      status: 404,
+      message: "User Not Found",
+      role: "", 
+    });
+  } catch (err) {
+    console.error("Error in checking role:", err);
+    return res.json({
+      status: 500,
+      message: "Error in checking mail",
+      role: "",
+    });
+  }
+});
+
+
 
 
 app.post('/verify-otp', async(req, res) => {
@@ -171,7 +227,7 @@ app.get('/conversations/:caseId', async (req, res) => {
 
   try {
     const conversation = await message.findOne({ case_id: caseId });
-
+    // console.log(conversation)
     if (!conversation) {
       return res.json({ messages: [] });
     }
@@ -186,7 +242,7 @@ app.get('/conversations/:caseId', async (req, res) => {
 
     // Send response with messages and hasMore flag
     res.json({
-      
+      mail:conversation.userIds,
       messages: paginatedMessages,
       hasMore: start > 0 // Check if there are more messages to load
     });
@@ -273,6 +329,7 @@ app.post('/newcase', authenticateToken, async (req, res) => {
       suspect,
       evidence,
       datetime,
+      officer:email
     });
 
     const user = await mongo.findOne({ email });
@@ -331,7 +388,7 @@ app.post('/common_cases', authenticateToken, async (req, res) => {
     });
     
     await newCase.save();
-    const chat=new Conversation({case_id:newCase._id});
+    const chat=new Conversation({case_id:newCase._id,userIds:mail});
     await chat.save();
     selectedOfficer.reports.push(title);
     await selectedOfficer.save();
@@ -491,6 +548,35 @@ app.post('/Upload_images', authenticateToken, upload_img.array("images"), async 
   }
 });
 
+app.get('/filer/:caseId', async (req, res) => {
+  const { caseId } = req.params;
+
+  try {
+    const objectId = new mongoose.Types.ObjectId(caseId);
+    const filer_mail = await commoncase.findById({_id:objectId}); // use findById for single doc
+
+    if (filer_mail) {
+      return res.status(200).json({
+        status: 200,
+        email: filer_mail.email,
+        message: "Got case"
+      });
+    }
+
+    return res.status(404).json({
+      status: 404,
+      message: "Case not found"
+    });
+
+  } catch (err) {
+    console.error("Error fetching filer mail:", err);
+    return res.status(500).json({
+      status: 500,
+      message: "Server error while fetching case"
+    });
+  }
+});
+
 
 app.get('/get_case_images/:caseid', async (req, res) => {
      const { caseid } = req.params;
@@ -516,7 +602,7 @@ app.get('/get_case_images/:caseid', async (req, res) => {
         if (images.length === 0) {
           return res.status(200).json({
             status: 404,
-            message: "No images found for this case"
+            message: "No images found for this case",
           });
         }
   
@@ -525,7 +611,8 @@ app.get('/get_case_images/:caseid', async (req, res) => {
           image_id: image.image_id,  // Image's unique identifier
           imageUrl: `/images/${image.image_id}`,  // URL to the image
           contentType: image.contentType,
-          uploadedAt: image.uploadedAt
+          uploadedAt: image.uploadedAt,
+          officer:uDoc.officer
         }));
   
         return res.status(200).json({
@@ -550,7 +637,8 @@ app.get('/get_case_images/:caseid', async (req, res) => {
         image_id: image.image_id,
         imageUrl: `/images/${image.image_id}`,  // URL for the image
         contentType: image.contentType,
-        uploadedAt: image.uploadedAt
+        uploadedAt: image.uploadedAt,
+        officer:caseDoc.officer
       }));
   
       // Send the image data back in the response
