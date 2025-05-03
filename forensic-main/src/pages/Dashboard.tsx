@@ -118,6 +118,7 @@ export default function Dashboard() {
     }
     islogin();
     checkLoginStatus();
+    
   }, []);
 
   useEffect(() => {
@@ -160,10 +161,11 @@ export default function Dashboard() {
       } finally {
         setLoading(false);
       }
+      
     }
-
     if (isLoggedIn) fetchCases();
-  }, [isLoggedIn]);
+  
+  }, [isLoggedIn,formData]);
 
   const filteredCases = cases.filter(
     (c) => {

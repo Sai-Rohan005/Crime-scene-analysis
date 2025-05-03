@@ -554,7 +554,7 @@ export default function CitizenDashboard() {
       }
     }
     if (isLoggedIn) fetchComplaints();
-  }, [isLoggedIn]);
+  }, [isLoggedIn,formData]);
 
   const filteredComplaints = complaints.filter((c) => {
     return c.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||

@@ -45,7 +45,8 @@ import {
   Settings,
   Share,
   Trash2,
-  UploadCloud
+  UploadCloud,
+  Video
 } from "lucide-react";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -65,6 +66,7 @@ export default function Case() {
     const { toast } = useToast();
     const isMobile = useIsMobile();
     const [canMessage,setcanMessage]=useState(false);
+    const [isCallActive, setIsCallActive] = useState(false);
     const [BgColor,setBgColor]=useState("bg-white");
     const [officer,setofficer]=useState("");
     const [images,setimages]=useState(null);
@@ -140,54 +142,66 @@ export default function Case() {
       }, [caseId]);
       
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
     
-        const formData = new FormData();
-        formData.append("caseName", caseName); // Append case ID or name
-    
-        Array.from(files).forEach((file) => {
-            formData.append("files", file); // Append each file under the same key
-        });
-    
-        try {
-            const imgresp = await axios.post("http://localhost:5500/Upload_images", formData, {
-                headers: {
-                    Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
-                    "Content-Type": "multipart/form-data", 
-                },
+const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+  
+    const formData = new FormData();
+    formData.append("case_id", caseName);
+  
+    // Append each file directly to the formData
+    Array.from(files).forEach((file) => {
+        if (file.type.startsWith("image/")) {
+            formData.append("images", file); // Append image directly to FormData
+        } else {
+            toast({
+                title: "Invalid File Type",
+                description: "Only image files are supported.",
+                variant: "destructive",
             });
-    
+        }
+    });
+  
+    try {
+        const response = await axios.post("http://localhost:5500/Upload_images", formData, {
+            headers: {
+                Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+            },
+        });
+  
+        // Handle server response
+        if (response.data.status !== 200) {
+            toast({
+                variant: "destructive",
+                title: "File Upload Error",
+                description: response.data.message,
+            });
+        } else {
             toast({
                 title: "Upload Successful",
                 description: `Uploaded ${files.length} image${files.length !== 1 ? "s" : ""}.`,
             });
-    
-            // Display uploaded images
-            Array.from(files).forEach((file) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    if (e.target?.result) {
-                        setUploadedImages((prev) => [...prev, e.target!.result!.toString()]);
-                    }
-                };
-                reader.readAsDataURL(file);
-            });
-    
-        } catch (err) {
-            console.error("Upload error", err);
-            toast({
-                variant: "destructive",
-                title: "Upload failed",
-                description: "Uploading image failed.",
-            });
+  
+            // Optionally handle response here, like refreshing uploaded images
+            setUploadedImages((prev) => [
+                ...prev,
+                ...Array.from(files).map((file) => URL.createObjectURL(file)),
+            ]);
         }
-    
-        if (e.target) {
-            e.target.value = ""; // Clear input after upload
-        }
-    };
+    } catch (error) {
+        toast({
+            title: "Upload Failed",
+            description: "Failed to upload images. Please try again.",
+            variant: "destructive",
+        });
+    }
+  
+    // Reset file input after upload
+    if (e.target) {
+        e.target.value = "";
+    }
+  };
     
     const handleDeleteImage = (index: number) => {
         const newImages = [...uploadedImages];
@@ -331,6 +345,12 @@ export default function Case() {
         }
       };
 
+    //   const handleVideoCall = () => {
+
+    //     console.log("Start video call logic here");
+    //     setIsCallActive(true);
+    //   };
+      
 
     return (
         <div className={`flex flex-col h-screen min-h-screen p-6 transition-colors duration-300 ${BgColor}`}>
@@ -358,12 +378,20 @@ export default function Case() {
                         </DialogTrigger>
                         <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
                             <div className="flex-1 flex flex-col overflow-hidden min-h-0 h-[60vh]">
-                              <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
+                              {/* <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
                               <DialogTitle>
                                 <span className="text-xl font-semibold">{officer}</span>
                             </DialogTitle>
 
-                              </div>
+                              </div> */}
+                              <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
+                                <DialogTitle>
+                                    <span className="text-xl font-semibold">{officer}</span>
+                                </DialogTitle>
+                                
+                                
+                                </div>
+
                               <div className="flex-1 flex flex-col p-4 bg-gray-100 overflow-auto min-h-0">
                                 <div className="space-y-4">
                                   {chatMessages.map((msg, index) => (
