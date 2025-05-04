@@ -45,7 +45,9 @@ export default function ForgotPassword() {
 
         const email=formData.email
         const resend=await axios.post("http://localhost:5500/resent_otp", {email},{
-            headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken")}` },
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+          },
         })
         if(resend.data.status===200){
             toast({

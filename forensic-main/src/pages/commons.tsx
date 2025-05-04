@@ -506,13 +506,10 @@ export default function CitizenDashboard() {
   const navigate = useNavigate();
 
   const checkLoginStatus = async () => {
-    const token = sessionStorage.getItem("authToken");
-    if (!token) return navigate("/signin");
-
     try {
-      const resp = await axios.get("http://localhost:5500/checklogin", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const resp = await axios.get("http://localhost:5500/checklogin", { headers: {
+        Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+      }, });
       resp.data.status === 200 ? setIsLoggedIn(true) : navigate("/signin");
     } catch (error) {
       console.error("Authentication error: ", error);
@@ -528,9 +525,9 @@ export default function CitizenDashboard() {
     async function fetchComplaints() {
       setLoading(true);
       try {
-        const res = await axios.get("http://localhost:5500/commonscases", {
-          headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken")}` },
-        });
+        const res = await axios.get("http://localhost:5500/commonscases", { headers: {
+          Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+        },});
         if (res.data.status === 200) {
           // console.log(res);
           const mail = res.data.data[0]?.email || "anonymous";
@@ -573,9 +570,9 @@ export default function CitizenDashboard() {
 
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:5500/common_cases", formData, {
-        headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken")}` },
-      });
+      const response = await axios.post("http://localhost:5500/common_cases", formData, { headers: {
+        Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+      },});
       // console.log(response);
       if (response?.data?.status === 200) {
         const newComplaint = {

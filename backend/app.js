@@ -8,6 +8,7 @@ let mongo = require('./datbase/mongo');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcrypt');
+
 const validator = require('validator');
 const path = require('path');
 const dns = require('dns');
@@ -761,7 +762,32 @@ app.post('/login', async (req, res) => {
   }
 });
 
+app.post('/allanalyse',authenticateToken,async(req,res)=>{
+    const email=req.user.email;
+    const case_id=req.body.caseId;
+    try{
+      const getimg=await commoncase.findOne({_id:case_id});
+      if(!getimg){
+        const getimg_cases=await Cases.findOne({_id:case_id});
+        if(!getimg_cases){
+          return res.json({
+            status:401,
+            message:"No Case Found"
+          })
+        }
+        const imagePaths = getimg_cases.images.map(img => img.image_id);
 
+
+        
+        
+      }
+      const imagePaths = getimg.images.map(img => img.image_id);
+
+
+    }catch(err){
+      console.log(err);
+    }
+})
 
 app.post('/forgot-password', async (req, res) => {
   const { email } = req.body;

@@ -123,7 +123,7 @@ export default function Case() {
               const formattedName = username.charAt(0).toUpperCase() + username.slice(1);
               console.log(formattedName);
               setofficer(formattedName);
-              // console.log(updatedMessages);
+              
               
               setChatMessages(updatedMessages);
     
@@ -135,7 +135,7 @@ export default function Case() {
           };
         
           if (caseId) {
-            fetchImages(); // Trigger fetch if caseId exists
+            fetchImages(); 
           }
       
         fetchmail();
@@ -345,11 +345,6 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         }
       };
 
-    //   const handleVideoCall = () => {
-
-    //     console.log("Start video call logic here");
-    //     setIsCallActive(true);
-    //   };
       
 
     return (
@@ -378,12 +373,6 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
                         </DialogTrigger>
                         <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
                             <div className="flex-1 flex flex-col overflow-hidden min-h-0 h-[60vh]">
-                              {/* <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
-                              <DialogTitle>
-                                <span className="text-xl font-semibold">{officer}</span>
-                            </DialogTitle>
-
-                              </div> */}
                               <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
                                 <DialogTitle>
                                     <span className="text-xl font-semibold">{officer}</span>
