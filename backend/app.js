@@ -668,6 +668,74 @@ app.get('/images/:image_id', (req, res) => {
   });
 });
 
+app.get('/reference/:caseId', async (req, res) => {
+  const case_id = req.params.caseId;
+  const objectId = new mongoose.Types.ObjectId(case_id);
+
+  try {
+    let caseData = await Cases.findOne({ _id: objectId }) || await commoncase.findOne({ _id: objectId });
+
+    if (!caseData) {
+      return res.json({
+        status: 401,
+        message: "No case found"
+      });
+    }
+
+    const type = caseData.type;
+
+    try {
+      const ptype = await Cases.find({ type, status: "finished" });
+      const pptype = await commoncase.find({ type, status: "finished" });
+
+      if (ptype.length === 0 && pptype.length === 0) {
+        return res.json({
+          status: 200,
+          message: "No Cases of this type found in both",
+          cases: null
+        });
+      }
+
+      if (ptype.length === 0) {
+        return res.json({
+          status: 200,
+          message: "Found cases",
+          cases: pptype
+        });
+      }
+
+      if (pptype.length === 0) {
+        return res.json({
+          status: 200,
+          message: "Found cases",
+          cases: ptype
+        });
+      }
+
+      const combine = [...ptype, ...pptype];
+      return res.json({
+        status: 200,
+        message: "Cases found",
+        cases: combine
+      });
+
+    } catch (err) {
+      console.error("Error while fetching similar cases:", err);
+      return res.json({
+        status: 500,
+        message: "Error with database"
+      });
+    }
+
+  } catch (err) {
+    console.error("Error while fetching case by ID:", err);
+    return res.json({
+      status: 500,
+      message: "Error with database"
+    });
+  }
+});
+
 app.post('/signup', async (req, res) => {
   const { email, password, confirm_Password } = req.body;
 

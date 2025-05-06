@@ -1,7 +1,7 @@
 
 // FULL UPDATED CODE
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,7 @@ import {
   BarChart3,
   Book,
   Camera,
+  Clock,
   Eye,
   FileText,
   FileUp,
@@ -37,6 +38,7 @@ import {
   Image,
   Info,
   LayoutGrid,
+  Menu,
   MessageCircle,
   MessageSquare,
   Microscope,
@@ -66,10 +68,18 @@ export default function Case() {
     const { toast } = useToast();
     const isMobile = useIsMobile();
     const [canMessage,setcanMessage]=useState(false);
-    const [isCallActive, setIsCallActive] = useState(false);
     const [BgColor,setBgColor]=useState("bg-white");
     const [officer,setofficer]=useState("");
-    const [images,setimages]=useState(null);
+    const [ShowShareDialog,setShowShareDialog]=useState(false);
+    const [showReferenceDialog, setShowReferenceDialog] = useState(false);
+    const [ShowMessageDialog,setShowMessageDialog]=useState(false);
+    const [cases, setCases] = useState([]);
+    const [isSmallScreen, setIsSmallScreen] = useState(false);
+    const [showVideoCall, setShowVideoCall] = useState(false);
+    const [callend,setcallend]=useState("");
+    const [searchQuery, setSearchQuery] = useState("");
+    const [sortField, setSortField] = useState("lastUpdated");
+    const [sortDirection, setSortDirection] = useState("desc");
 
      const token = sessionStorage.getItem('authToken');
         
@@ -140,6 +150,19 @@ export default function Case() {
       
         fetchmail();
       }, [caseId]);
+
+      useEffect(() => {
+        const handleResize = () => {
+            setIsSmallScreen(window.innerWidth < 768); // 768px is the breakpoint for 'sm' screens in Tailwind CSS
+        };
+
+        handleResize(); // Check screen size initially
+        window.addEventListener('resize', handleResize); // Add event listener for resizing
+
+        return () => {
+            window.removeEventListener('resize', handleResize); // Clean up the event listener
+        };
+    }, []);
       
 
     
@@ -345,6 +368,57 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         }
       };
 
+
+      const Reference=async()=>{
+        try{
+            const getreference=await axios.get(`http://localhost:5500/reference/${caseId}`);
+            console.log(getreference);
+            if(getreference.data.status===200){
+                if(getreference.data.cases!==null){
+
+
+                    setCases(getreference.data.cases.map(c => ({
+                        _id: c._id,
+                        title: c.title,
+                        type: c.type,
+                        status: c.status || "New",
+                        date: c.datetime || new Date().toISOString(),
+                        lastUpdated: c.updatedAt || new Date().toISOString(),
+                        
+                      }
+                    )));
+                }
+                toast({
+                    variant:"default",
+                    title:"Cases",
+                    description:getreference.data.message
+                })
+            }
+        }catch(err){
+            console.log(err);
+        }
+    }
+    const filteredCases = cases.filter(
+        (c) => {
+          if (c.title && typeof c.title === 'string') {
+            return (
+              c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              c.type.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+          }
+        }
+      );
+    
+    const sortedCases = [...filteredCases].sort((a, b) => {
+        if (sortDirection === "asc") {
+          return a[sortField] > b[sortField] ? 1 : -1;
+        } else {
+          return a[sortField] < b[sortField] ? 1 : -1;
+        }
+      });
+    const truncatedCaseName = isSmallScreen ? caseName.slice(0, 6) : caseName; // Truncate for small screens
+
+
       
 
     return (
@@ -357,134 +431,288 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
                         </Button>
                     </Link>
                     <div className="flex items-center">
-                        <h1 className="text-xl font-semibold">{caseName}</h1>
+                        <h1 className="text-xl font-semibold">{truncatedCaseName}</h1>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    {/* Message Dialog */}
-                    {canMessage && (
-                        <Dialog>
+                <div className="flex flex-wrap items-center gap-2 sm:justify-start justify-center px-2 py-2">
+                    {/* Large screen buttons */}
+                    <div className="hidden sm:flex flex-wrap items-center gap-2">
+                        {/* Message Dialog */}
+                        {canMessage && (
+                        // <Dialog open={ShowMessageDialog} onOpenChange={setShowMessageDialog}>
+                        //     <DialogTrigger asChild>
+                        //     <Button variant="outline" size="sm">
+                        //         <MessageCircle className="w-4 h-4 mr-2" />
+                        //         Message
+                        //     </Button>
+                        //     </DialogTrigger>
+                        //     <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
+                        //     <div className="flex-1 flex flex-col overflow-hidden min-h-0 h-[60vh]">
+                        //         <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
+                        //         <DialogTitle>
+                        //             <span className="text-xl font-semibold">{officer}</span>
+                        //         </DialogTitle>
+                        //         </div>
+
+                        //         <div className="flex-1 flex flex-col p-4 bg-gray-100 overflow-auto min-h-0">
+                        //         <div className="space-y-4">
+                        //             {chatMessages.map((msg, index) => (
+                        //             <div key={index} className={`flex ${msg.isBot ? "justify-start" : "justify-end"}`}>
+                        //                 <div className={`max-w-xs p-3 rounded-lg ${msg.isBot ? "bg-muted" : "bg-primary text-white"}`}>
+                        //                 <p className="text-sm">{msg.text}</p>
+                        //                 </div>
+                        //             </div>
+                        //             ))}
+                        //         </div>
+                        //         </div>
+                        //         <div className="flex items-center space-x-2 p-4 border-t bg-white">
+                        //         <input
+                        //             type="text"
+                        //             className="flex-1 p-2 border rounded-md"
+                        //             placeholder="Type a message..."
+                        //             value={messageInput}
+                        //             onChange={(e) => setMessageInput(e.target.value)}
+                        //         />
+                        //         <button
+                        //             className="px-4 py-2 bg-blue-500 text-white rounded-md"
+                        //             onClick={sendMessage}
+                        //             disabled={messageInput.trim() === ""}
+                        //         >
+                        //             Send
+                        //         </button>
+                        //         </div>
+                        //     </div>
+                        //     </DialogContent>
+                        // </Dialog>
+                        <Dialog open={ShowMessageDialog} onOpenChange={setShowMessageDialog}>
                         <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm">
                             <MessageCircle className="w-4 h-4 mr-2" />
                             Message
-                          </Button>
+                            </Button>
                         </DialogTrigger>
                         <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
                             <div className="flex-1 flex flex-col overflow-hidden min-h-0 h-[60vh]">
-                              <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
-                                <DialogTitle>
-                                    <span className="text-xl font-semibold">{officer}</span>
-                                </DialogTitle>
-                                
-                                
+                                <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
+                                    <DialogTitle className="text-xl font-semibold">{officer}</DialogTitle>
+                                    
+                                    <Dialog open={showVideoCall} onOpenChange={setShowVideoCall}>
+                                        <DialogTrigger asChild>
+                                            <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="text-white hover:text-blue-300"
+                                            title="Start Video Call"
+                                            // onClick={handleStartVideoCall}
+                                            >
+                                            <Video className="w-5 h-5" />
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="max-w-4xl">
+                                            {/* <VideoCall
+                                            // isCaller={true}
+                                            // targetUserId={callend}
+                                            // localUserId={decoded.email}
+                                            /> */}
+                                        </DialogContent>
+                                        </Dialog>
+
                                 </div>
 
-                              <div className="flex-1 flex flex-col p-4 bg-gray-100 overflow-auto min-h-0">
+
+                            <div className="flex-1 flex flex-col p-4 bg-gray-100 overflow-auto min-h-0">
                                 <div className="space-y-4">
-                                  {chatMessages.map((msg, index) => (
+                                {chatMessages.map((msg, index) => (
                                     <div key={index} className={`flex ${msg.isBot ? "justify-start" : "justify-end"}`}>
-                                      <div className={`max-w-xs p-3 rounded-lg ${msg.isBot ? "bg-muted" : "bg-primary text-white"}`}>
+                                    <div className={`max-w-xs p-3 rounded-lg ${msg.isBot ? "bg-muted" : "bg-primary text-white"}`}>
                                         <p className="text-sm">{msg.text}</p>
-                                      </div>
                                     </div>
-                                  ))}
+                                    </div>
+                                ))}
                                 </div>
-                              </div>
-                              <div className="flex items-center space-x-2 p-4 border-t bg-white">
+                            </div>
+
+                            <div className="flex items-center space-x-2 p-4 border-t bg-white">
                                 <input
-                                  type="text"
-                                  className="flex-1 p-2 border rounded-md"
-                                  placeholder="Type a message..."
-                                  value={messageInput}
-                                  onChange={(e) => setMessageInput(e.target.value)}
+                                type="text"
+                                className="flex-1 p-2 border rounded-md"
+                                placeholder="Type a message..."
+                                value={messageInput}
+                                onChange={(e) => setMessageInput(e.target.value)}
                                 />
                                 <button
-                                  className="px-4 py-2 bg-blue-500 text-white rounded-md"
-                                  onClick={sendMessage}
-                                  disabled={messageInput.trim() === ""}
+                                className="px-4 py-2 bg-blue-500 text-white rounded-md"
+                                onClick={sendMessage}
+                                disabled={messageInput.trim() === ""}
                                 >
-                                  Send
+                                Send
                                 </button>
-                              </div>
                             </div>
-                          
-                          
+                            </div>
                         </DialogContent>
-                      </Dialog>
-                      
-                    )}
+                        </Dialog>
 
-                    {/* Share Dialog */}
-                    <Dialog>
+                        )}
+
+                        {/* Take Reference Dialog */}
+                        <Dialog open={showReferenceDialog} onOpenChange={setShowReferenceDialog}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" onClick={Reference}>
+                            Take Reference
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-5xl w-full max-h-[120vh] overflow-auto">
+                            <DialogTitle>Take Reference</DialogTitle>
+                            <DialogDescription>
+                            If you want to do similar to the other cases of the same type
+                            </DialogDescription>
+                            {sortedCases.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <div className="rounded-full bg-muted w-12 h-12 flex items-center justify-center mb-4">
+                                <FileText className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                                <h3 className="font-medium text-lg mb-1">No cases found</h3>
+                                <p className="text-muted-foreground mb-4">
+                                {searchQuery ? "No cases match your search query" : "Create your first case to get started"}
+                                </p>
+                            </div>
+                            ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {sortedCases.map((c) => (
+                                <Link to={`/case/${c._id}`} key={c._id}>
+                                    <Card className="h-full transition-shadow hover:shadow-md">
+                                    <CardHeader>
+                                        <CardTitle className="flex justify-between items-start">
+                                        <span className="line-clamp-2">{c.title}</span>
+                                        <span className="text-xs font-normal px-2 py-1 rounded-full bg-forensic bg-opacity-10 text-forensic">
+                                            {c.status}
+                                        </span>
+                                        </CardTitle>
+                                        <CardDescription>{c.type}</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="flex items-center text-sm text-muted-foreground">
+                                        <FileText className="h-4 w-4 mr-1" />
+                                        Created on {formatDate(c.date)}
+                                        </div>
+                                    </CardContent>
+                                    <CardFooter className="text-xs text-muted-foreground flex justify-end">
+                                        <div className="flex items-center">
+                                        <Clock className="h-3 w-3 mr-1" />
+                                        Updated {formatDate(c.lastUpdated)}
+                                        </div>
+                                    </CardFooter>
+                                    </Card>
+                                </Link>
+                                ))}
+                            </div>
+                            )}
+                        </DialogContent>
+                        </Dialog>
+
+                        {/* Share Dialog */}
+                        <Dialog open={ShowShareDialog} onOpenChange={setShowShareDialog}>
                         <DialogTrigger asChild>
                             <Button variant="outline" size="sm">
-                                <Share className="w-4 h-4 mr-2" />
-                                Share
+                            <Share className="w-4 h-4 mr-2" />
+                            Share
                             </Button>
                         </DialogTrigger>
                         <DialogContent>
                             <DialogHeader>
-                                <DialogTitle>Share this case</DialogTitle>
-                                <DialogDescription>
-                                    Invite others to collaborate on this forensic investigation.
-                                </DialogDescription>
+                            <DialogTitle>Share this case</DialogTitle>
+                            <DialogDescription>
+                                Invite others to collaborate on this forensic investigation.
+                            </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
-                                <div className="grid gap-2">
-                                    <Input placeholder="Enter email address" />
-                                    <Button size="sm" className="w-full">Send invitation</Button>
-                                </div>
-                                <Separator />
-                                <div>
-                                    <p className="text-sm font-medium mb-2">Share link</p>
-                                    <div className="flex items-center gap-2">
-                                        <Input value={window.location.href} readOnly />
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(window.location.href);
-                                                toast({
-                                                    title: "Link copied",
-                                                    description: "Case link copied to clipboard.",
-                                                });
-                                            }}
-                                        >
-                                            Copy
-                                        </Button>
-                                    </div>
+                            <div className="grid gap-2">
+                                <Input placeholder="Enter email address" />
+                                <Button size="sm" className="w-full">Send invitation</Button>
+                            </div>
+                            <Separator />
+                            <div>
+                                <p className="text-sm font-medium mb-2">Share link</p>
+                                <div className="flex items-center gap-2">
+                                <Input value={window.location.href} readOnly />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                    navigator.clipboard.writeText(window.location.href);
+                                    toast({
+                                        title: "Link copied",
+                                        description: "Case link copied to clipboard.",
+                                    });
+                                    }}
+                                >
+                                    Copy
+                                </Button>
                                 </div>
                             </div>
+                            </div>
                         </DialogContent>
-                    </Dialog>
+                        </Dialog>
 
-                    {/* Background Dropdown */}
-                    <DropdownMenu>
+                        {/* Background Dropdown */}
+                        <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm">
-                                <Settings className="w-4 h-4" />
+                            <Settings className="w-4 h-4" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
                             <DropdownMenuLabel>Background</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => setBgColor("bg-white")}>
-                                Light
+                            Light
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setBgColor("bg-gray-900 text-white")}>
-                                Dark
+                            Dark
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setBgColor("bg-blue-50")}>
-                                Soft Blue
+                            Soft Blue
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setBgColor("bg-yellow-50")}>
-                                Cream
+                            Cream
                             </DropdownMenuItem>
                         </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
+                        </DropdownMenu>
+                    </div>
+
+                    {/* Small Screen Dropdown */}
+                    <div className="sm:hidden">
+                        <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                            <Menu className="w-4 h-4 mr-2" />
+                            Actions
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48">
+                            {canMessage && (
+                                <DropdownMenuItem onClick={() => setShowMessageDialog(true)}>
+                                    <MessageCircle className="w-4 h-4 mr-2" />
+                                    Message
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => setShowReferenceDialog(true)}>
+                            <FileText className="w-4 h-4 mr-2" />
+                            Take Reference
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setShowShareDialog(true)}>
+                            <Share className="w-4 h-4 mr-2" />
+                            Share
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                            <Settings className="w-4 h-4 mr-2" />
+                            Background
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                    </div>
 
             </header>
             <div className="flex flex-1 overflow-hidden">
@@ -827,5 +1055,14 @@ function Customize({ className }: { className?: string }) {
             <path d="M22 2h-10v10h10V2z" />
         </svg>
     );
+
 }
+function formatDate(dateString: string): string {
+    const options: Intl.DateTimeFormatOptions = {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+  }
 
