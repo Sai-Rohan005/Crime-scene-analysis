@@ -47,7 +47,8 @@ import {
 
 } from "lucide-react";
 import { ReactNode, useContext, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { io } from 'socket.io-client';
 import { jwtDecode } from "jwt-decode";
 
 
@@ -55,6 +56,7 @@ import { jwtDecode } from "jwt-decode";
 export default function Case() {
     const { caseId } = useParams();
     const [caseName, setCaseName] = useState(`Case #${caseId?.replace("case-", "")}`);
+    const [isIncomingCall, setIsIncomingCall] = useState(false);
     const [uploadedImages, setUploadedImages] = useState<string[]>([]);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [summary, setSummary] = useState<string | null>(null);
@@ -67,6 +69,12 @@ export default function Case() {
     const isMobile = useIsMobile();
     const [BgColor,setBgColor]=useState("bg-white");
     const token = sessionStorage.getItem('authToken');
+
+    const [callSignal, setCallSignal] = useState(null);
+    const [callerId, setCallerId] = useState(null);
+    const socket = io('http://localhost:5500'); // Your server URL
+
+    const navigate=useNavigate();
     
     const decoded = jwtDecode<{ email: string }>(token);
     
@@ -81,11 +89,11 @@ export default function Case() {
       { from: "other", text: "Hello! How can I help you today?" },
     ]);
     
-  const [chatMessages, setChatMessages] = useState<{
+    const [chatMessages, setChatMessages] = useState<{
     timestamp: ReactNode;
     id: number; text: string, isBot: boolean 
-}[]>([]);
-  const [messageInput, setMessageInput] = useState('');
+    }[]>([]);
+    const [messageInput, setMessageInput] = useState('');
 
 
     useEffect(() => {
@@ -135,73 +143,41 @@ export default function Case() {
     
     }, [caseId, toast]); // Effect triggers when caseId changes
     
-  
-  
+    useEffect(() => {
+        if (decoded.email) {
+    
+          const registerUser = () => {
+            console.log("🔁 Registering user after connect/reconnect:", decoded.email);
+            socket.emit("registerUser", decoded.email);
+          };
+    
+          socket.on("connect", registerUser);
+    
+          return () => {
+            socket.off("connect", registerUser);
+          };
+        }
+      }, [decoded.email]);
 
-
-// const handleFileUpload = async(e: React.ChangeEvent<HTMLInputElement>) => {
-//     const files = e.target.files;
-//     if (!files || files.length === 0) return;
-
-//     let uploadedCount = 0;
-//     const formData=new FormData();
-//     formData.append("case_id",caseName);
-            
-//     Array.from(files).forEach((file) => {
-//         if (file.type.startsWith("image/")) {
-//             const reader = new FileReader();
-//             formData.append("images", file);
-//             reader.onload = async (e) => {
-//                 if (e.target?.result) {
-//                     const base64Image = e.target.result.toString();
-//                     setUploadedImages((prev) => [...prev, base64Image]);
-//                     uploadedCount++;
-
-                   
-//                 }
-//             };
-//             reader.readAsDataURL(file);
-//         } else {
-//             toast({
-//                 title: "Invalid File Type",
-//                 description: "Only image files are supported at this time.",
-//                 variant: "destructive",
-//             });
-//         }
-//     });
-//     try {
-//       // Send the base64 image to the backend
-//       const fileup=await axios.post("http://localhost:5500/Upload_images", formData ,{
-//         headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken")}` },});
-
-
-//         if(fileup.data.status!==200){
-//           toast({
-//             variant:"destructive",
-//             title:"File upload",
-//             description:fileup.data.message
-//           })
-//         }
+    useEffect(() => {
+      const handleIncomingCall = (data) => {
+        console.log("Invoked");
+        setIsIncomingCall(true);
+        setCallSignal(data.signalData);
+        setCallerId(data.from);
+      };
+    
+      socket.on('incomingCall', handleIncomingCall);
       
+    
+      return () => {
+        socket.off('incomingCall', handleIncomingCall);
+      };
+    }, []);
 
-//       if (uploadedCount === files.length) {
-//           toast({
-//               title: "Upload Successful",
-//               description: `Uploaded ${files.length} image${files.length !== 1 ? "s" : ""}.`,
-//           });
-//       }
-//   } catch (error) {
-//       toast({
-//           title: "Upload Failed",
-//           description: `Failed to upload:`,
-//           variant: "destructive",
-//       });
-//   }
+    
+  
 
-//     if (e.target) {
-//         e.target.value = "";
-//     }
-// };
 
 
 const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -361,19 +337,38 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     
 
 
-    
+  
 
-    const analyzeEvidence = () => {
-        setIsAnalyzing(true);
-        toast({ title: "Analysis Started", description: "Analyzing your evidence..." });
 
-        setTimeout(() => {
-            setIsAnalyzing(false);
-            if (!isMobile) setActiveTab("studio");
-            toast({ title: "Analysis Complete", description: "View results in Studio tab." });
-        }, 2000);
+    const acceptCall = () => {
+      console.log('Call accepted');
+      setIsIncomingCall(false); // Hide incoming call notification
+  
+      // Notify the caller that the call was accepted
+      socket.emit('acceptCall', {
+        to: callerId, // Send back the socket ID of the caller
+        signal: callSignal, // Send back the signal data needed for WebRTC
+      });
+  
+      // Trigger video call UI to start
+      // Open the video call component or route to a video call page
+      navigate(`/video/${caseId}`);
     };
-
+  
+    const rejectCall = () => {
+      console.log('Call rejected');
+      setIsIncomingCall(false); // Hide incoming call notification
+  
+      // Notify the caller that the call was rejected
+      socket.emit('rejectCall', {
+        to: callerId, // Send back the socket ID of the caller
+      });
+  
+      // Handle call rejection, close any opened video-related UI
+      // Optionally display a rejection message or any other action
+    };
+  
+  
     return (
         
 <div className={`flex flex-col min-h-screen transition-colors duration-300 ${BgColor}`}>
@@ -500,46 +495,65 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     </div>
   </div>
 
-  {/* Chat Section */}
   <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+  {/* Chat Header */}
+  <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
+    <h2 className="font-semibold text-lg">{officer}</h2>
+  </div>
 
-    {/* Chat Header */}
-    <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
-      <h2 className="font-semibold text-lg">{officer}</h2>
-    </div>
-
-    {/* Chat Messages */}
-    <div className="flex-1 flex flex-col p-4 bg-gray-100 overflow-auto min-h-0">
-      <div className="space-y-4">
-        {chatMessages.map((msg, index) => (
-          <div key={index} className={`flex ${msg.isBot ? "justify-start" : "justify-end"}`}>
-            <div className={`max-w-xs p-3 rounded-lg ${msg.isBot ? "bg-muted" : "bg-primary text-white"}`}>
-              <p className="text-sm">{msg.text}</p>
-            </div>
-          </div>
-        ))}
+  {/* Incoming Video Call Notification */}
+  {isIncomingCall && (
+    <div className="flex items-center justify-between p-4 border-b bg-yellow-500 text-white">
+      <p className="text-lg">Incoming Video Call</p>
+      <div className="flex space-x-2">
+        <button
+          className="px-4 py-2 bg-green-500 text-white rounded-md"
+          onClick={acceptCall}
+        >
+          Accept
+        </button>
+        <button
+          className="px-4 py-2 bg-red-500 text-white rounded-md"
+          onClick={rejectCall}
+        >
+          Reject
+        </button>
       </div>
     </div>
+  )}
 
-    {/* Chat Input */}
-    <div className="flex items-center space-x-2 p-4 border-t bg-white">
-      <input
-        type="text"
-        className="flex-1 p-2 border rounded-md"
-        placeholder="Type a message..."
-        value={messageInput}
-        onChange={(e) => setMessageInput(e.target.value)}
-      />
-      <button
-        className="px-4 py-2 bg-blue-500 text-white rounded-md"
-        onClick={sendMessage}
-        disabled={messageInput.trim() === ""}
-      >
-        Send
-      </button>
+  {/* Chat Messages */}
+  <div className="flex-1 flex flex-col p-4 bg-gray-100 overflow-auto min-h-0">
+    <div className="space-y-4">
+      {chatMessages.map((msg, index) => (
+        <div key={index} className={`flex ${msg.isBot ? "justify-start" : "justify-end"}`}>
+          <div className={`max-w-xs p-3 rounded-lg ${msg.isBot ? "bg-muted" : "bg-primary text-white"}`}>
+            <p className="text-sm">{msg.text}</p>
+          </div>
+        </div>
+      ))}
     </div>
-
   </div>
+
+  {/* Chat Input */}
+  <div className="flex items-center space-x-2 p-4 border-t bg-white">
+    <input
+      type="text"
+      className="flex-1 p-2 border rounded-md"
+      placeholder="Type a message..."
+      value={messageInput}
+      onChange={(e) => setMessageInput(e.target.value)}
+    />
+    <button
+      className="px-4 py-2 bg-blue-500 text-white rounded-md"
+      onClick={sendMessage}
+      disabled={messageInput.trim() === ""}
+    >
+      Send
+    </button>
+  </div>
+</div>
+
 </div>
 
 {/* Mobile Bottom Nav */}

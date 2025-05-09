@@ -9,6 +9,12 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:5500', {
+  withCredentials: true,
+  transports: ['websocket', 'polling'],
+});
 
 export default function SignInAndVerify() {
   const [isLoading, setIsLoading] = useState(false);
@@ -127,6 +133,7 @@ export default function SignInAndVerify() {
       }
   
       if (response.data.status === 200) {
+        setIsSuccess(true);
         toast({
           title: "Verified",
           description: response.data.message,
@@ -155,6 +162,14 @@ export default function SignInAndVerify() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (formData.email  ) {
+      socket.emit('registerUser', formData.email);
+      console.log("📤 registerEmail emitted:", formData.email);
+    }
+  }, [handleOtpSubmit]);
+  
   
 
   return (

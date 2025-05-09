@@ -24,6 +24,7 @@ import { Pricing } from "./components/Pricing";
 import { Terms } from "./components/Terms";
 import { Testimonials } from "./components/Testimonials";
 import Unauthorized from "./pages/unauthorized";
+import Video from "./pages/video";
 
 
 const queryClient = new QueryClient();
@@ -50,6 +51,8 @@ const App = () => (
           <Route path="/pricing" element={<Pricing/>} />
           <Route path="/terms" element={<Terms/>} />
           <Route path="/about" element={<Testimonials/>} />
+          <Route path="/video/:caseId" element={<Video/>} />
+
           
           <Route path="/usercases/:caseId" element={<Usercases/>} />
           

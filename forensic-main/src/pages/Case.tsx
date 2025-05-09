@@ -10,7 +10,6 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -51,9 +50,16 @@ import {
   Video
 } from "lucide-react";
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import { Textarea } from "@/components/ui/textarea";
+
+
+import { io } from 'socket.io-client';
+const socket = io('http://localhost:5500', {
+    withCredentials: true,
+    transports: ['websocket', 'polling'],
+  });
 
 export default function Case() {
     const { caseId } = useParams();
@@ -80,8 +86,14 @@ export default function Case() {
     const [searchQuery, setSearchQuery] = useState("");
     const [sortField, setSortField] = useState("lastUpdated");
     const [sortDirection, setSortDirection] = useState("desc");
+    const [emails, setEmails] = useState<{ officerEmail: string; citizenEmail: string } | null>(null);
+    const [users, setUsers] = useState<{ [email: string]: string }>({});
 
-     const token = sessionStorage.getItem('authToken');
+
+
+    const navigate=useNavigate();
+
+    const token = sessionStorage.getItem('authToken');
         
     const decoded = jwtDecode<{ email: string }>(token);
     const triggerFileUpload = () => {
@@ -95,7 +107,7 @@ export default function Case() {
         const fetchmail = async () => {
           try {
             const respmail = await axios.get(`http://localhost:5500/filer/${caseId}`);
-            console.log(respmail);
+            // console.log(respmail);
             if (respmail.data.status === 200) {
               setcanMessage(true);
             }
@@ -124,14 +136,14 @@ export default function Case() {
             }
             try {
               const getmsg=await axios.get(`http://localhost:5500/conversations/${caseId}`);
-              console.log(getmsg);
+            //   console.log(getmsg);
               const updatedMessages = getmsg.data.messages.map(msg => ({
                 ...msg,
                 isBot: msg.senderId === decoded.email
               }));
               const username = getmsg.data.mail.split('@')[0];
               const formattedName = username.charAt(0).toUpperCase() + username.slice(1);
-              console.log(formattedName);
+            //   console.log(formattedName);
               setofficer(formattedName);
               
               
@@ -151,7 +163,7 @@ export default function Case() {
         fetchmail();
       }, [caseId]);
 
-      useEffect(() => {
+    useEffect(() => {
         const handleResize = () => {
             setIsSmallScreen(window.innerWidth < 768); // 768px is the breakpoint for 'sm' screens in Tailwind CSS
         };
@@ -162,69 +174,130 @@ export default function Case() {
         return () => {
             window.removeEventListener('resize', handleResize); // Clean up the event listener
         };
+
+        
     }, []);
-      
 
     
-const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-  
-    const formData = new FormData();
-    formData.append("case_id", caseName);
-  
-    // Append each file directly to the formData
-    Array.from(files).forEach((file) => {
-        if (file.type.startsWith("image/")) {
-            formData.append("images", file); // Append image directly to FormData
-        } else {
+    
+    useEffect(() => {
+        const fetchEmails = async () => {
+            try {
+                const res = await axios.get(`http://localhost:5500/emails/${caseId}`);
+                const data = res.data;
+                setEmails({
+                    officerEmail: data.officer,
+                    citizenEmail: data.email,
+                });
+            } catch (err) {
+                console.error("Failed to fetch emails:", err);
+            }
+        };
+        
+        if (caseId) fetchEmails();
+        
+        // Request the list of users only once
+        socket.emit("requestUsers");
+        
+        const handleUsers = (userList: any) => {
+            console.log("👥 Received user list:", userList);
+            setUsers(userList);
+        };
+        
+        socket.on("allUsers", handleUsers);
+        
+        // Clean up listener on unmount
+        return () => {
+            socket.off("allUsers", handleUsers);
+        };
+    }, [caseId]);
+    
+
+      useEffect(() => {
+        console.log("📬 Emails:", emails);
+        console.log("👥 Users:", users);
+      }, [emails, users]);
+      
+      useEffect(() => {
+          if (emails?.officerEmail || emails?.citizenEmail) {
+            const myEmail = emails.officerEmail || emails.citizenEmail;
+      
+            const registerUser = () => {
+              console.log("🔁 Registering user after connect/reconnect:", myEmail);
+              socket.emit("registerUser", myEmail);
+            };
+      
+            socket.on("connect", registerUser);
+      
+            return () => {
+              socket.off("connect", registerUser);
+            };
+          }
+        }, [emails]);
+      
+
+
+    
+    
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+    
+        const formData = new FormData();
+        formData.append("case_id", caseName);
+    
+        // Append each file directly to the formData
+        Array.from(files).forEach((file) => {
+            if (file.type.startsWith("image/")) {
+                formData.append("images", file); // Append image directly to FormData
+            } else {
+                toast({
+                    title: "Invalid File Type",
+                    description: "Only image files are supported.",
+                    variant: "destructive",
+                });
+            }
+        });
+    
+        try {
+            const response = await axios.post("http://localhost:5500/Upload_images", formData, {
+                headers: {
+                    Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+                },
+            });
+    
+            // Handle server response
+            if (response.data.status !== 200) {
+                toast({
+                    variant: "destructive",
+                    title: "File Upload Error",
+                    description: response.data.message,
+                });
+            } else {
+                toast({
+                    title: "Upload Successful",
+                    description: `Uploaded ${files.length} image${files.length !== 1 ? "s" : ""}.`,
+                });
+    
+                // Optionally handle response here, like refreshing uploaded images
+                setUploadedImages((prev) => [
+                    ...prev,
+                    ...Array.from(files).map((file) => URL.createObjectURL(file)),
+                ]);
+            }
+        } catch (error) {
             toast({
-                title: "Invalid File Type",
-                description: "Only image files are supported.",
+                title: "Upload Failed",
+                description: "Failed to upload images. Please try again.",
                 variant: "destructive",
             });
         }
-    });
-  
-    try {
-        const response = await axios.post("http://localhost:5500/Upload_images", formData, {
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
-            },
-        });
-  
-        // Handle server response
-        if (response.data.status !== 200) {
-            toast({
-                variant: "destructive",
-                title: "File Upload Error",
-                description: response.data.message,
-            });
-        } else {
-            toast({
-                title: "Upload Successful",
-                description: `Uploaded ${files.length} image${files.length !== 1 ? "s" : ""}.`,
-            });
-  
-            // Optionally handle response here, like refreshing uploaded images
-            setUploadedImages((prev) => [
-                ...prev,
-                ...Array.from(files).map((file) => URL.createObjectURL(file)),
-            ]);
+    
+        // Reset file input after upload
+        if (e.target) {
+            e.target.value = "";
         }
-    } catch (error) {
-        toast({
-            title: "Upload Failed",
-            description: "Failed to upload images. Please try again.",
-            variant: "destructive",
-        });
-    }
-  
-    // Reset file input after upload
-    if (e.target) {
-        e.target.value = "";
-    }
-  };
+    };
     
     const handleDeleteImage = (index: number) => {
         const newImages = [...uploadedImages];
@@ -260,8 +333,8 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         formData.append("case_id", caseId || "unknown_case");
         formData.append("image_id", filename);
         formData.append("image", blob, filename);
-        console.log(formData);
-        const response = await fetch("http://localhost:8000/generate-summary", {
+        // console.log(formData);
+        const response = await fetch("http://localhost:8000/ml/generate-summary", {
           method: "POST",
           body: formData,
         });
@@ -271,7 +344,7 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         }
     
         const data = await response.json();
-        console.log(data);
+        // console.log(data);
         if (data.summary) {
           setSummary(data.summary); // Store full summary for backup if needed
           animateTyping(data.summary);
@@ -321,11 +394,11 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           { from: "other", text: "Hello! How can I help you today?" },
         ]);
         
-      const [chatMessages, setChatMessages] = useState<{
+    const [chatMessages, setChatMessages] = useState<{
         timestamp: ReactNode;
         id: number; text: string, isBot: boolean 
     }[]>([]);
-      const [messageInput, setMessageInput] = useState('');
+    const [messageInput, setMessageInput] = useState('');
     
     
 
@@ -369,10 +442,10 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       };
 
 
-      const Reference=async()=>{
+    const Reference=async()=>{
         try{
             const getreference=await axios.get(`http://localhost:5500/reference/${caseId}`);
-            console.log(getreference);
+            // console.log(getreference);
             if(getreference.data.status===200){
                 if(getreference.data.cases!==null){
 
@@ -494,31 +567,44 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
                         </DialogTrigger>
                         <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
                             <div className="flex-1 flex flex-col overflow-hidden min-h-0 h-[60vh]">
-                                <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
-                                    <DialogTitle className="text-xl font-semibold">{officer}</DialogTitle>
-                                    
-                                    <Dialog open={showVideoCall} onOpenChange={setShowVideoCall}>
-                                        <DialogTrigger asChild>
-                                            <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            className="text-white hover:text-blue-300"
-                                            title="Start Video Call"
-                                            // onClick={handleStartVideoCall}
-                                            >
-                                            <Video className="w-5 h-5" />
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="max-w-4xl">
-                                            {/* <VideoCall
-                                            // isCaller={true}
-                                            // targetUserId={callend}
-                                            // localUserId={decoded.email}
-                                            /> */}
-                                        </DialogContent>
-                                        </Dialog>
+                            <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
+                                <DialogTitle className="text-xl font-semibold">{officer}</DialogTitle>
 
-                                </div>
+                                <Dialog open={showVideoCall} onOpenChange={setShowVideoCall}>
+                                    <DialogTrigger asChild>
+                                        <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className={`text-white ${users[emails?.citizenEmail ?? ''] ? 'hover:text-blue-300' : 'opacity-50 cursor-not-allowed'}`}
+                                        title={users[emails?.citizenEmail ?? ''] ? 'Start Video Call' : 'Citizen not connected'}
+                                        onClick={() => {
+                                            if (users[emails?.citizenEmail ?? '']) {
+                                            const email = emails?.citizenEmail ?? '';
+                                            
+                                            
+                                            // Emitting event to start the call
+                                            socket.emit('callUserByEmail', {
+                                                email,
+                                                signalData: 'yourSignalData', 
+                                                from:  emails?.officerEmail ?? '', // Replace with actual officer's email
+                                              
+                                            });
+
+                                            // Navigate to the route after emitting
+                                            navigate(`/video/${caseId}`);
+                                            }
+                                        }}
+                                        >
+                                        <Video className="w-5 h-5" />
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-4xl">
+                                        {/* Video Call Content */}
+                                    </DialogContent>
+                                    </Dialog>
+
+
+                            </div>
 
 
                             <div className="flex-1 flex flex-col p-4 bg-gray-100 overflow-auto min-h-0">

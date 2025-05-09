@@ -23,12 +23,18 @@ const upload = multer({ dest: "uploads/" });
 const message=require('./datbase/message');
 
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:8080',
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
 app.use('/uploads', express.static('uploads'));
 
 const saltRounds = 10;
 const verificationCodes = {};
 const otp = {}
+const emailToSocket = {};
+const socketToEmail = {};
 
 const police_ids={"sairohan005@gmail.com":true,
 
@@ -214,7 +220,7 @@ app.post('/verify-otp', async(req, res) => {
 
 
 app.get('/conversations/:caseId', async (req, res) => {
-  const { caseId } = req.params;
+  const  caseId  = req.params.caseId;
   // console.log(req.query);
   let skip = parseInt(req.query.skip) || 0;  // how many messages to skip
   let limit = parseInt(req.query.limit) || 50;  // how many messages to fetch
@@ -253,7 +259,7 @@ app.get('/conversations/:caseId', async (req, res) => {
 
 
 app.post('/messages/:caseId', async (req, res) => {
-  const { caseId } = req.params;
+  const caseId  = req.params.caseId;
   const { text, senderId } = req.body;
 
   // console.log("Request body:", req.body); // Log incoming data
@@ -294,6 +300,15 @@ app.post('/messages/:caseId', async (req, res) => {
     res.status(500).json({ error: 'Failed to add message' });
   }
 });
+
+
+// app.post('/registerSocket', (req, res) => {
+//   const { email, socketId } = req.body;
+//   emailToSocket[email] = socketId;
+//   socketToEmail[socketId] = email;
+//   console.log(`📨 Email ${email} registered to socket ${socketId}`);
+//   res.sendStatus(200);
+// });
 
 
 
@@ -547,7 +562,7 @@ app.post('/Upload_images', authenticateToken, upload_img.array("images"), async 
 });
 
 app.get('/filer/:caseId', async (req, res) => {
-  const { caseId } = req.params;
+  const caseId  = req.params.caseId;
 
   try {
     const objectId = new mongoose.Types.ObjectId(caseId);
@@ -576,16 +591,18 @@ app.get('/filer/:caseId', async (req, res) => {
 });
 
 
-app.get('/get_case_images/:caseid', async (req, res) => {
-     const { caseid } = req.params;
+app.get('/get_case_images/:caseId', async (req, res) => {
+     const  case_id  = req.params.caseId;
+
+    const objectId = new mongoose.Types.ObjectId(case_id);
   
     try {
       // Try to find the case in the Cases collection
-      const caseDoc = await Cases.findOne({ _id:caseid });
+      const caseDoc = await Cases.findOne({ _id:objectId });
   
       if (!caseDoc) {
         // If the case is not found in the Cases collection, check the commoncase collection
-        const uDoc = await commoncase.findOne({ _id:caseid });
+        const uDoc = await commoncase.findOne({ _id:objectId });
         
         if (!uDoc) {
           return res.status(404).json({
@@ -735,6 +752,44 @@ app.get('/reference/:caseId', async (req, res) => {
     });
   }
 });
+
+app.get('/emails/:caseId', async (req, res) => {
+  const case_id = req.params.caseId;
+
+  // Validate the ID format before converting
+  if (!mongoose.Types.ObjectId.isValid(case_id)) {
+    return res.status(400).json({
+      status: 400,
+      message: "Invalid case ID format",
+    });
+  }
+
+  const objectId = new mongoose.Types.ObjectId(case_id);
+
+  try {
+    const mails = await commoncase.findOne({ _id: objectId });
+    if (!mails) {
+      return res.status(404).json({
+        status: 404,
+        message: "Case not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: 200,
+      message: "Email found",
+      officer: mails.officer,
+      email: mails.email,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      status: 500,
+      message: "Internal server error",
+    });
+  }
+});
+
 
 app.post('/signup', async (req, res) => {
   const { email, password, confirm_Password } = req.body;
@@ -943,8 +998,8 @@ app.post('/reset-password', async (req, res) => {
 
 
 
+module.exports=app;
 
-
-app.listen(5500, () => {
-  console.log('🚀 Server started on port 5500');
-});
+// app.listen(5500, () => {
+//   console.log('🚀 Server started on port 5500');
+// });
