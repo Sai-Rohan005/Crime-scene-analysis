@@ -58,6 +58,7 @@ export default function Dashboard() {
       datetime: formatDateTimeLocal(new Date()),
       suspect: "",
       evidence: "",
+      browserloc:{},
     });
   const [loading, setLoading] = useState(false);
   const [displayName,setdisplayName]=useState("");
@@ -201,6 +202,16 @@ export default function Dashboard() {
     setLoading(true);
 
     try {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+          const browserlocation={
+            latitude,
+            longitude,
+          }
+          formData.browserloc=browserlocation
+        })
       const response = await axios.post("http://localhost:5500/newcase", formData, {
         headers: {
           Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
@@ -224,7 +235,8 @@ export default function Dashboard() {
           location: "",
           datetime: formatDateTimeLocal(new Date()),
           suspect: "",
-          evidence: "",});
+          evidence: "",
+          browserloc:{}});
         setIsDialogOpen(false);
 
         toast({
@@ -497,3 +509,4 @@ function formatDateTimeLocal(date) {
   const minutes = pad(d.getMinutes());
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
+

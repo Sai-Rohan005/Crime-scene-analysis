@@ -18,6 +18,28 @@ const caseSchema = new mongoose.Schema({
       uploadedAt: { type: Date, default: Date.now }
     }
   ],
+  media: [
+    {
+      media_id: String,
+      path: String,
+      contentType: String,
+      uploadedAt: { type: Date, default: Date.now }
+    }
+  ],
+
+  ipAddress: String,
+  geolocation: {
+    city: String,
+    region: String,
+    country: String,
+    latitude: Number,
+    longitude: Number
+  },
+  browserLocation: {
+    latitude: Number,
+    longitude: Number
+  },
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Cases', caseSchema);

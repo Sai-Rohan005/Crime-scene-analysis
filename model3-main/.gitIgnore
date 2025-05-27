@@ -1,0 +1,51 @@
+# # Ignore Python cache files
+# __pycache__/
+
+# moviepy_src/
+
+# venv/
+# .env
+
+# utils/__pycache__/
+# .yolov8n.pt
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Machine learning models / weights
+*.pt
+*.pth
+*.ckpt
+
+# Video and media files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+
+# Static results and outputs
+static/keyframes/
+static/annotated_images/
+static/hybrid_outputs/
+static/scene_summaries/
+static/high_priority_clips/
+static/case_report.md
+
+# MoviePy cache (if any)
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
+
+# VS Code project settings (optional)
+.vscode/

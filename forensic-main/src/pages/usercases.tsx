@@ -49,6 +49,7 @@ import {
 import { ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { io } from 'socket.io-client';
+import socket from "./socket";
 import { jwtDecode } from "jwt-decode";
 
 
@@ -72,7 +73,7 @@ export default function Case() {
 
     const [callSignal, setCallSignal] = useState(null);
     const [callerId, setCallerId] = useState(null);
-    const socket = io('http://localhost:5500'); // Your server URL
+    // const socket = io('http://localhost:5500'); // Your server URL
 
     const navigate=useNavigate();
     
@@ -101,11 +102,11 @@ export default function Case() {
         try {
           // Fetch images for the given caseId
           const response = await axios.get(`http://localhost:5500/get_case_images/${caseId}`);
-          // console.log("Response from backend:", response); // Log the entire response
+          console.log("Response from backend:", response); // Log the entire response
     
           if (response.data && Array.isArray(response.data.images)) {
             const { images } = response.data; // Get images array from response
-            const imageUrls = images.map((image) => `http://localhost:5500/images/${image.image_id}`);
+            const imageUrls = images.map((image) => `http://localhost:5500/images/${image.imageUrl}`);
             setUploadedImages(imageUrls); // Store the image URLs in the state
           }
         } catch (err) {
@@ -141,7 +142,7 @@ export default function Case() {
         fetchImages(); // Trigger fetch if caseId exists
       }
     
-    }, [caseId, toast]); // Effect triggers when caseId changes
+    }, [caseId, toast,uploadedImages]); // Effect triggers when caseId changes
     
     useEffect(() => {
         if (decoded.email) {
@@ -180,65 +181,72 @@ export default function Case() {
 
 
 
-const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const files = e.target.files;
-  if (!files || files.length === 0) return;
-
-  const formData = new FormData();
-  formData.append("case_id", caseName);
-
-  // Append each file directly to the formData
-  Array.from(files).forEach((file) => {
-      if (file.type.startsWith("image/")) {
-          formData.append("images", file); // Append image directly to FormData
-      } else {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+    
+      const formData = new FormData();
+      formData.append("case_id", caseName);
+    
+      let imageCount = 0;
+      let videoCount = 0;
+    
+      Array.from(files).forEach((file) => {
+        if (file.type.startsWith("image/")) {
+          formData.append("images", file); // same key used for multiple images
+          imageCount++;
+        } else if (file.type.startsWith("video/")) {
+          formData.append("videos", file); // same key used for multiple videos
+          videoCount++;
+        } else {
           toast({
-              title: "Invalid File Type",
-              description: "Only image files are supported.",
-              variant: "destructive",
+            title: "Invalid File Type",
+            description: `Unsupported file type: ${file.name}`,
+            variant: "destructive",
           });
-      }
-  });
-
-  try {
-      const response = await axios.post("http://localhost:5500/Upload_images", formData, {
+        }
+      });
+    
+      try {
+        const response = await axios.post("http://localhost:5500/Upload_media", formData, {
           headers: {
-              Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+            Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
           },
-      });
-
-      // Handle server response
-      if (response.data.status !== 200) {
+        });
+    
+        if (response.data.status !== 200) {
           toast({
-              variant: "destructive",
-              title: "File Upload Error",
-              description: response.data.message,
+            variant: "destructive",
+            title: "File Upload Error",
+            description: response.data.message,
           });
-      } else {
+        } else {
           toast({
-              title: "Upload Successful",
-              description: `Uploaded ${files.length} image${files.length !== 1 ? "s" : ""}.`,
+            title: "Upload Successful",
+            description: `Uploaded ${imageCount} image${imageCount !== 1 ? "s" : ""} and ${videoCount} video${videoCount !== 1 ? "s" : ""}.`,
           });
-
-          // Optionally handle response here, like refreshing uploaded images
+    
           setUploadedImages((prev) => [
-              ...prev,
-              ...Array.from(files).map((file) => URL.createObjectURL(file)),
+            ...prev,
+            ...Array.from(files)
+              .filter((f) => f.type.startsWith("image/"))
+              .map((file) => URL.createObjectURL(file)),
           ]);
-      }
-  } catch (error) {
-      toast({
+        }
+      } catch (error) {
+        toast({
           title: "Upload Failed",
-          description: "Failed to upload images. Please try again.",
+          description: "Failed to upload files. Please try again.",
           variant: "destructive",
-      });
-  }
-
-  // Reset file input after upload
-  if (e.target) {
-      e.target.value = "";
-  }
-};
+        });
+      }
+    
+      // Clear input
+      if (e.target) {
+        e.target.value = "";
+      }
+    };
+    
 
     
     const fetchSummary = async () => {
@@ -428,7 +436,7 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 
   <div className={`w-full md:w-96 border-r overflow-y-auto ${activeTab === "sources" ? "block" : "hidden md:block"}`}>
     <div className="flex items-center justify-between p-4 border-b">
-      <h2 className="font-semibold">Evidence Images</h2>
+      <h2 className="font-semibold">Evidence</h2>
       <Button variant="ghost" size="icon">
         <LayoutGrid className="w-4 h-4" />
       </Button>
@@ -439,7 +447,7 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         id="file-upload"
         type="file"
         className="hidden"
-        accept="image/*"
+        accept="image/*,video/*"
         multiple
         ref={fileInputRef}
         onChange={handleFileUpload}
@@ -451,31 +459,62 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           <div className="p-6 bg-muted/50 rounded-lg mb-6">
             {/* Placeholder for file upload icon */}
           </div>
-          <h3 className="font-medium text-lg">Upload evidence images</h3>
+          <h3 className="font-medium text-lg">Upload evidence</h3>
           <p className="text-sm mt-2 max-w-xs mb-8">
-            Upload images from the crime scene or other evidence to analyze patterns and generate insights.
+            Upload images and videos from the crime scene or other evidence to analyze patterns and generate insights.
           </p>
           <Button variant="default" className="gap-1" onClick={triggerFileUpload}>
             {/* Upload icon */}
-            Upload images
+            Upload evidence
           </Button>
         </div>
       ) : (
         <div className="p-4 space-y-3">
-          {uploadedImages.map((src, index) => (
-            <div
-              key={index}
-              className={`relative group rounded-md border overflow-hidden flex items-center p-2 hover:bg-accent cursor-pointer ${selectedImage === src ? 'bg-accent/60' : ''}`}
-            >
-              <div className="h-16 w-16 rounded overflow-hidden mr-3 flex-shrink-0">
-                <img src={src} alt={`Evidence ${index + 1}`} className="h-full w-full object-cover" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">Evidence image {index + 1}</p>
-                <p className="text-xs text-muted-foreground">Image • Added {new Date().toLocaleDateString()}</p>
-              </div>
-            </div>
-          ))}
+           {uploadedImages.map((src, index) => {
+                                const isVideo = src.match(/\.(mp4|webm|ogg)$/i);
+                                return (
+                                <div
+                                    key={index}
+                                    className={`relative group rounded-md border overflow-hidden flex items-center p-2 hover:bg-accent cursor-pointer `
+                                   
+                                  }
+                                >
+                                    <div className="h-16 w-16 rounded overflow-hidden mr-3 flex-shrink-0">
+                                    {isVideo ? (
+                                        <video
+                                        src={src}
+                                        className="h-full w-full object-cover"
+                                        muted
+                                        loop
+                                        playsInline
+                                        />
+                                    ) : (
+                                        <img
+                                        src={src}
+                                        alt={`Evidence ${index + 1}`}
+                                        className="h-full w-full object-cover"
+                                        />
+                                    )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                    <p className="font-medium truncate">Evidence {index + 1}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {isVideo ? 'Video' : 'Image'} • Added {new Date().toLocaleDateString()}
+                                    </p>
+                                    </div>
+                                    <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="opacity-0 group-hover:opacity-100"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                    }}
+                                    >
+                                    <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                );
+                            })}
         
       </div>
     )}

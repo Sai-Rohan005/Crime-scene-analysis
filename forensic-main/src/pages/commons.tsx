@@ -1,3 +1,4 @@
+
 // import { useState, useEffect } from "react";
 // import { Link, useNavigate } from "react-router-dom";
 // import {
@@ -497,6 +498,7 @@ export default function CitizenDashboard() {
     datetime: formatDateTimeLocal(new Date()),
     suspect: "",
     evidence: "",
+    browserloc:{},
   });
 
   const [loading, setLoading] = useState(false);
@@ -570,6 +572,16 @@ export default function CitizenDashboard() {
 
     setLoading(true);
     try {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+          const browserlocation={
+            latitude,
+            longitude,
+          }
+          formData.browserloc=browserlocation
+        })
       const response = await axios.post("http://localhost:5500/common_cases", formData, { headers: {
         Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
       },});

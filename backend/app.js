@@ -17,10 +17,11 @@ const commoncase = require('./datbase/usercases');
 const Conversation=require('./datbase/message');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
-const upload = multer({ dest: "uploads/" });
+// const upload = multer({ dest: "uploads/" });
 
 
 const message=require('./datbase/message');
+const { console } = require('inspector');
 
 app.use(express.json());
 app.use(cors({
@@ -29,6 +30,8 @@ app.use(cors({
   credentials: true
 }));
 app.use('/uploads', express.static('uploads'));
+app.use('/images', express.static(path.join(__dirname, 'uploads')));
+
 
 const saltRounds = 10;
 const verificationCodes = {};
@@ -57,18 +60,14 @@ function generateOtp() {
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadPath = path.join(__dirname, 'uploads');
-    // console.log('Saving image to:', uploadPath);  // Log the upload path
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    // Ensure the file is saved with its original name
-    const fileName = file.originalname;
-    cb(null, fileName);  // Use original name
+    cb(null, Date.now() + '-' + file.originalname); // unique filename
   }
 });
 
-// Store files in memory as Buffer
-const upload_img = multer({ storage });
+const upload = multer({ storage });
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -322,7 +321,9 @@ app.post('/newcase', authenticateToken, async (req, res) => {
     location,
     datetime,
     suspect,
-    evidence, } = req.body;
+    evidence,
+    browserloc
+   } = req.body;
   const email = req.user.email;
 
   try {
@@ -333,16 +334,32 @@ app.post('/newcase', authenticateToken, async (req, res) => {
       });
     }
 
+    const ip =
+    req.headers['x-forwarded-for']?.split(',')[0] ||
+    req.connection.remoteAddress ||
+    req.socket.remoteAddress ||
+    req.connection.socket?.remoteAddress;
+    const geo = await fetch(`https://ipapi.co/${ip}/json/`).then(res => res.json());
+
     const case_n = new Cases({
-      title,
-      type,
-      email,
-      description,
-      location,
-      suspect,
-      evidence,
-      datetime,
-      officer:email
+      title:title,
+      type:type,
+      email:email,
+      description:description,
+      location:location,
+      suspect:suspect,
+      evidence:evidence,
+      datetime:datetime,
+      officer:email,
+      ipAddress: ip,
+      geolocation: {
+        city: geo.city || "",
+        region: geo.region || "",
+        country: geo.country_name || "",
+        latitude: geo.latitude || "",
+        longitude: geo.longitude || "",
+      },
+      browserLocation: browserloc || {},
     });
 
     const user = await mongo.findOne({ email });
@@ -371,8 +388,9 @@ app.post('/newcase', authenticateToken, async (req, res) => {
 });
 
 app.post('/common_cases', authenticateToken, async (req, res) => {
-  const { title, type, description, location, datetime, suspect, evidence } = req.body;
+  const { title, type, description,location, datetime, suspect, evidence,browserloc } = req.body;
   const mail = req.user.email;
+  
 
   try {
     const officers = await mongo.find({role:"police"});
@@ -388,16 +406,35 @@ app.post('/common_cases', authenticateToken, async (req, res) => {
       }
     });
 
+    const ip =
+    req.headers['x-forwarded-for']?.split(',')[0] || // If behind a proxy like nginx
+    req.connection.remoteAddress ||
+    req.socket.remoteAddress ||
+    req.connection.socket?.remoteAddress;
+    
+    console.log(ip);
+    const geo = await fetch(`https://ipapi.co/${ip}/json/`).then(res => res.json());
+
+
     const newCase = new commoncase({
-      title,
-      type,
+      title:title,
+      type:type,
       email: mail,
-      description,
-      location,
-      suspect,
-      evidence,
+      description:description,
+      location:location,
+      suspect:suspect,
+      evidence:evidence,
       datetime: new Date(datetime),
-      officer: selectedOfficer.email
+      officer: selectedOfficer.email,
+      ipAddress: ip,
+      geolocation: {
+        city: geo.city || "",
+        region: geo.region || "",
+        country: geo.country_name || "",
+        latitude: geo.latitude || "",
+        longitude: geo.longitude || "",
+      },
+      browserLocation: browserloc || {},
     });
     
     await newCase.save();
@@ -412,6 +449,7 @@ app.post('/common_cases', authenticateToken, async (req, res) => {
       id:newCase._id
     });
   } catch (err) {
+    console.error(err);
     return res.status(500).json({
       status: 500,
       message: "Failed to create new case",
@@ -473,93 +511,191 @@ app.get('/commonscases', authenticateToken, async (req, res) => {
 });
 
 
-app.post('/Upload_images', authenticateToken, upload_img.array("images"), async (req, res) => {
-  try {
-    const email = req.user.email;
-    const rawCaseId = req.body.case_id;
-    const files = req.files;
+// app.post('/Upload_images', authenticateToken, upload_img.array("images"), async (req, res) => {
+//   try {
+//     const email = req.user.email;
+//     const rawCaseId = req.body.case_id;
+//     const files = req.files;
 
-    if (!files || files.length === 0) {
-      return res.status(400).json({
-        status: 400,
-        message: "No files uploaded",
-      });
-    }
+//     if (!files || files.length === 0) {
+//       return res.status(400).json({
+//         status: 400,
+//         message: "No files uploaded",
+//       });
+//     }
 
-    // Clean case ID
-    const caseIdString = rawCaseId?.includes("#") ? rawCaseId.split("#")[1] : rawCaseId;
-    const caseId = mongoose.Types.ObjectId.isValid(caseIdString) ? caseIdString : null;
+//     // Clean case ID
+//     const caseIdString = rawCaseId?.includes("#") ? rawCaseId.split("#")[1] : rawCaseId;
+//     const caseId = mongoose.Types.ObjectId.isValid(caseIdString) ? caseIdString : null;
 
-    if (!caseId) {
-      return res.status(400).json({
-        status: 400,
-        message: "Invalid Case ID format",
-      });
-    }
+//     if (!caseId) {
+//       return res.status(400).json({
+//         status: 400,
+//         message: "Invalid Case ID format",
+//       });
+//     }
 
-    // console.log("Uploading images for Case ID:", caseId);
+//     // console.log("Uploading images for Case ID:", caseId);
 
-    const user = await mongo.findOne({ email });
-    if (!user) {
+//     const user = await mongo.findOne({ email });
+//     if (!user) {
+//       return res.status(404).json({
+//         status: 404,
+//         message: "User not found",
+//       });
+//     }
+
+//     // Prepare the image data
+//     const imageData = files.map((file) => ({
+//       image_id: file.filename,
+//       data: file.buffer,
+//       contentType: file.mimetype,
+//       uploadedAt: new Date(),
+//     }));
+
+//     // Try finding the case in 'Cases' collection first
+//     const existingCase = await Cases.findOne({ _id: caseId });
+
+//     if (existingCase) {
+//       await Cases.updateOne(
+//         { _id: caseId },
+//         { $push: { images: { $each: imageData } } }
+//       );
+
+//       return res.status(200).json({
+//         status: 200,
+//         message: "Files uploaded successfully to Cases",
+//       });
+//     }
+
+//     // If not found in 'Cases', try 'CommonCase'
+//     const existingCommonCase = await commoncase.findOne({ _id: caseId });
+
+//     if (existingCommonCase) {
+//       await commoncase.updateOne(
+//         { _id: caseId },
+//         { $push: { images: { $each: imageData } } }
+//       );
+
+//       return res.status(200).json({
+//         status: 200,
+//         message: "Files uploaded successfully to CommonCase",
+//       });
+//     }
+
+//     // Case not found in either collection
+//     return res.status(404).json({
+//       status: 404,
+//       message: "Case not found in both collections",
+//     });
+
+//   } catch (err) {
+//     console.error("❌ Error during file upload:", err);
+//     return res.status(500).json({
+//       status: 500,
+//       message: "Error during file upload",
+//       error: err.message,
+//     });
+//   }
+// });
+
+app.post(
+  '/Upload_media',
+  authenticateToken,
+  upload.fields([
+    { name: 'images', maxCount: 10 },
+    { name: 'videos', maxCount: 5 }
+  ]),
+  async (req, res) => {
+    try {
+      const email = req.user.email;
+      const rawCaseId = req.body.case_id;
+
+      // Validate files
+      const images = req.files?.images || [];
+      const videos = req.files?.videos || [];
+
+      if (images.length === 0 && videos.length === 0) {
+        return res.status(400).json({
+          status: 400,
+          message: 'No files uploaded',
+        });
+      }
+
+      // Extract case ID
+      const caseIdString = rawCaseId?.includes('#')
+        ? rawCaseId.split('#')[1]
+        : rawCaseId;
+      const caseId = mongoose.Types.ObjectId.isValid(caseIdString)
+        ? caseIdString
+        : null;
+
+      if (!caseId) {
+        return res.status(400).json({
+          status: 400,
+          message: 'Invalid Case ID format',
+        });
+      }
+
+      // Validate user
+      const user = await mongo.findOne({ email });
+      if (!user) {
+        return res.status(404).json({
+          status: 404,
+          message: 'User not found',
+        });
+      }
+
+      // Prepare media metadata
+      const mediaData = [...images, ...videos].map((file) => ({
+        media_id: file.filename,
+        path: file.path,
+        contentType: file.mimetype,
+        uploadedAt: new Date(),
+      }));
+
+      // Try saving to Cases
+      const existingCase = await Cases.findOne({ _id: caseId });
+      if (existingCase) {
+        await Cases.updateOne(
+          { _id: caseId },
+          { $push: { media: { $each: mediaData } } }
+        );
+        return res.status(200).json({
+          status: 200,
+          message: 'Files uploaded successfully to Cases',
+        });
+      }
+
+      // Try saving to CommonCase
+      const existingCommonCase = await commoncase.findOne({ _id: caseId });
+      if (existingCommonCase) {
+        await commoncase.updateOne(
+          { _id: caseId },
+          { $push: { media: { $each: mediaData } } }
+        );
+        return res.status(200).json({
+          status: 200,
+          message: 'Files uploaded successfully to CommonCase',
+        });
+      }
+
       return res.status(404).json({
         status: 404,
-        message: "User not found",
+        message: 'Case not found in both collections',
+      });
+
+    } catch (err) {
+      console.error('❌ Error during file upload:', err);
+      return res.status(500).json({
+        status: 500,
+        message: 'Error during file upload',
+        error: err.message,
       });
     }
-
-    // Prepare the image data
-    const imageData = files.map((file) => ({
-      image_id: file.filename,
-      data: file.buffer,
-      contentType: file.mimetype,
-      uploadedAt: new Date(),
-    }));
-
-    // Try finding the case in 'Cases' collection first
-    const existingCase = await Cases.findOne({ _id: caseId });
-
-    if (existingCase) {
-      await Cases.updateOne(
-        { _id: caseId },
-        { $push: { images: { $each: imageData } } }
-      );
-
-      return res.status(200).json({
-        status: 200,
-        message: "Files uploaded successfully to Cases",
-      });
-    }
-
-    // If not found in 'Cases', try 'CommonCase'
-    const existingCommonCase = await commoncase.findOne({ _id: caseId });
-
-    if (existingCommonCase) {
-      await commoncase.updateOne(
-        { _id: caseId },
-        { $push: { images: { $each: imageData } } }
-      );
-
-      return res.status(200).json({
-        status: 200,
-        message: "Files uploaded successfully to CommonCase",
-      });
-    }
-
-    // Case not found in either collection
-    return res.status(404).json({
-      status: 404,
-      message: "Case not found in both collections",
-    });
-
-  } catch (err) {
-    console.error("❌ Error during file upload:", err);
-    return res.status(500).json({
-      status: 500,
-      message: "Error during file upload",
-      error: err.message,
-    });
   }
-});
+);
+
 
 app.get('/filer/:caseId', async (req, res) => {
   const caseId  = req.params.caseId;
@@ -576,7 +712,7 @@ app.get('/filer/:caseId', async (req, res) => {
       });
     }
 
-    return res.status(404).json({
+    return res.json({
       status: 404,
       message: "Case not found"
     });
@@ -612,7 +748,7 @@ app.get('/get_case_images/:caseId', async (req, res) => {
         }
   
         // If case found in commoncase, retrieve images
-        const images = uDoc.images;
+        const images = uDoc.media;
   
         if (images.length === 0) {
           return res.status(200).json({
@@ -624,7 +760,7 @@ app.get('/get_case_images/:caseId', async (req, res) => {
         // Map the image data to the desired format
         const imageData = images.map((image) => ({
           image_id: image.image_id,  // Image's unique identifier
-          imageUrl: `/images/${image.image_id}`,  // URL to the image
+          imageUrl: `${image.media_id}`,  // URL to the image
           contentType: image.contentType,
           uploadedAt: image.uploadedAt,
           officer:uDoc.officer
@@ -638,7 +774,7 @@ app.get('/get_case_images/:caseId', async (req, res) => {
       }
   
       // If the case is found in the Cases collection, retrieve the images
-      const images = caseDoc.images;
+      const images = caseDoc.media;
   
       if (images.length === 0) {
         return res.status(200).json({
@@ -650,7 +786,7 @@ app.get('/get_case_images/:caseId', async (req, res) => {
       // Map the image data to the desired format
       const imageData = images.map((image) => ({
         image_id: image.image_id,
-        imageUrl: `/images/${image.image_id}`,  // URL for the image
+        imageUrl: `${image.media_id}`,  // URL for the image
         contentType: image.contentType,
         uploadedAt: image.uploadedAt,
         officer:caseDoc.officer
@@ -672,18 +808,24 @@ app.get('/get_case_images/:caseId', async (req, res) => {
     }
   });
 
-app.get('/images/:image_id', (req, res) => {
-  const { image_id } = req.params;
-  const imageFilePath = path.join(__dirname, 'uploads', image_id);  // Assuming you're storing the images in a folder called 'uploads'
-
-  fs.readFile(imageFilePath, (err, data) => {
-    if (err) {
-      return res.status(404).json({ message: 'Image not found' });
-    }
-    res.contentType('image/jpeg');  // Adjust this to match the actual file type, like image/png, etc.
-    res.send(data);
+  app.get('/images/:imageUrl', (req, res) => {
+    const { imageUrl } = req.params;
+    const imageFilePath = path.join(__dirname, 'uploads', imageUrl);
+  
+    fs.stat(imageFilePath, (err, stats) => {
+      if (err || !stats.isFile()) {
+        return res.status(404).json({ message: 'File not found' });
+      }
+  
+      // Dynamically get mime type based on file extension
+      const mimeType = mime.getType(imageFilePath) || 'application/octet-stream';
+      res.contentType(mimeType);
+  
+      // Stream file to response (better for large files)
+      const readStream = fs.createReadStream(imageFilePath);
+      readStream.pipe(res);
+    });
   });
-});
 
 app.get('/reference/:caseId', async (req, res) => {
   const case_id = req.params.caseId;
@@ -758,7 +900,7 @@ app.get('/emails/:caseId', async (req, res) => {
 
   // Validate the ID format before converting
   if (!mongoose.Types.ObjectId.isValid(case_id)) {
-    return res.status(400).json({
+    return res.json({
       status: 400,
       message: "Invalid case ID format",
     });
@@ -769,7 +911,7 @@ app.get('/emails/:caseId', async (req, res) => {
   try {
     const mails = await commoncase.findOne({ _id: objectId });
     if (!mails) {
-      return res.status(404).json({
+      return res.json({
         status: 404,
         message: "Case not found",
       });

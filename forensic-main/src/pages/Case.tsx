@@ -1,4 +1,6 @@
 
+
+
 // FULL UPDATED CODE
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,10 +58,12 @@ import { Textarea } from "@/components/ui/textarea";
 
 
 import { io } from 'socket.io-client';
-const socket = io('http://localhost:5500', {
-    withCredentials: true,
-    transports: ['websocket', 'polling'],
-  });
+import socket from './socket';
+// const socket = io('http://localhost:5500', {
+//     withCredentials: true,
+//     autoConnect: false,
+//     transports: ['websocket', 'polling'],
+//   });
 
 export default function Case() {
     const { caseId } = useParams();
@@ -103,201 +107,227 @@ export default function Case() {
     };
 
 
-    useEffect(() => {
-        const fetchmail = async () => {
-          try {
-            const respmail = await axios.get(`http://localhost:5500/filer/${caseId}`);
-            // console.log(respmail);
-            if (respmail.data.status === 200) {
-              setcanMessage(true);
-            }
-          } catch (err) {
-            console.error("Failed to fetch filer email:", err);
+      
+
+  
+  // 1️⃣ Connect socket ONCE
+  useEffect(() => {
+    const con = async()=>{
+        if (!socket.connected) {
+            console.log("🌐 Connecting socket...");
+            await socket.connect();
+            console.log("connected sucessfully");
           }
-        };
-        const fetchImages = async () => {
-            try {
-              // Fetch images for the given caseId
-              const response = await axios.get(`http://localhost:5500/get_case_images/${caseId}`);
-              // console.log("Response from backend:", response); // Log the entire response
-        
-              if (response.data && Array.isArray(response.data.images)) {
-                const { images } = response.data; // Get images array from response
-                const imageUrls = images.map((image) => `http://localhost:5500/images/${image.image_id}`);
-                setUploadedImages(imageUrls); // Store the image URLs in the state
+
+    }
+    con();
+    
+  }, []);
+
+  // 2️⃣ Fetch emails after caseId is available
+  useEffect(() => {
+    if (!caseId) return;
+
+    const fetchEmails = async () => {
+      try {
+        const res = await axios.get(`http://localhost:5500/emails/${caseId}`);
+        setEmails({
+          officerEmail: res.data.officer,
+          citizenEmail: res.data.email,
+        });
+      } catch (err) {
+        console.error("❌ Failed to fetch emails:", err);
+      }
+    };
+
+    fetchEmails();
+  }, [caseId]);
+
+  // 3️⃣ Register user after emails are set and socket is ready
+  useEffect(() => {
+    if (!emails) return;
+
+    const myEmail = emails.officerEmail || emails.citizenEmail;
+    if (!myEmail) return;
+
+    const registerUser = () => {
+      console.log("🔁 Registering socket user:", myEmail);
+      socket.emit("registerUser", myEmail);
+    };
+
+    if (socket.connected) {
+      registerUser();
+    } else {
+      socket.once("connect", registerUser);
+    }
+
+    return () => {
+      socket.off("connect", registerUser);
+    };
+  }, [emails]);
+
+  // 4️⃣ Request users list once after connect
+  useEffect(() => {
+    if (!caseId) return;
+
+    const requestUsers = () => {
+      socket.emit("requestUsers");
+    };
+
+    if (socket.connected) {
+      requestUsers();
+    } else {
+      socket.once("connect", requestUsers);
+    }
+
+    const handleUsers = (userList) => {
+      console.log("👥 Received user list:", userList);
+      setUsers(userList);
+    };
+
+    socket.on("allUsers", handleUsers);
+
+    return () => {
+      socket.off("allUsers", handleUsers);
+      socket.off("connect", requestUsers);
+    };
+  }, [caseId]);
+
+  // 5️⃣ Fetch other data (images, messages)
+  useEffect(() => {
+    if (!caseId) return;
+
+    const fetchMail = async () => {
+      try {
+        const respmail = await axios.get(`http://localhost:5500/filer/${caseId}`);
+        if (respmail.data.status === 200) {
+          setcanMessage(true);
+        }
+      } catch (err) {
+        console.error("❌ Failed to fetch filer email:", err);
+      }
+    };
+
+    const fetchImagesAndMessages = async () => {
+      try {
+        const response = await axios.get(`http://localhost:5500/get_case_images/${caseId}`);
+        if (response.data?.images) {
+          const imageUrls = response.data.images.map(
+            (img) => `http://localhost:5500/images/${img.imageUrl}`
+          );
+          setUploadedImages(imageUrls);
+        }
+      } catch (err) {
+        console.error("❌ Error fetching images:", err);
+      }
+
+      try {
+        const msgRes = await axios.get(`http://localhost:5500/conversations/${caseId}`);
+        const updatedMessages = msgRes.data.messages.map((msg) => ({
+          ...msg,
+          isBot: msg.senderId === (emails?.officerEmail || emails?.citizenEmail),
+        }));
+
+        const username = msgRes.data.mail.split("@")[0];
+        const formatted = username.charAt(0).toUpperCase() + username.slice(1);
+        setofficer(formatted);
+        setChatMessages(updatedMessages);
+      } catch (err) {
+        console.error("❌ Error fetching messages:", err);
+      }
+    };
+
+    fetchMail();
+    fetchImagesAndMessages();
+  }, [caseId, emails,uploadedImages]);
+
+  // 6️⃣ Handle responsive screen size
+  useEffect(() => {
+    const handleResize = () => {
+      setIsSmallScreen(window.innerWidth < 768);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // 7️⃣ Debug
+  useEffect(() => {
+    console.log("📬 Emails:", emails);
+    console.log("👥 Users:", users);
+    console.log("🔌 Socket connected:", socket.connected);
+  }, [emails, users]);
+      
+
+
+    
+    
+        const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+          
+            const formData = new FormData();
+            formData.append("case_id", caseName);
+          
+            let imageCount = 0;
+            let videoCount = 0;
+          
+            Array.from(files).forEach((file) => {
+              if (file.type.startsWith("image/")) {
+                formData.append("images", file); // same key used for multiple images
+                imageCount++;
+              } else if (file.type.startsWith("video/")) {
+                formData.append("videos", file); // same key used for multiple videos
+                videoCount++;
+              } else {
+                toast({
+                  title: "Invalid File Type",
+                  description: `Unsupported file type: ${file.name}`,
+                  variant: "destructive",
+                });
               }
-            } catch (err) {
-              console.log("Error fetching images:", err);
+            });
+          
+            try {
+              const response = await axios.post("http://localhost:5500/Upload_media", formData, {
+                headers: {
+                  Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+                },
+              });
+          
+              if (response.data.status !== 200) {
+                toast({
+                  variant: "destructive",
+                  title: "File Upload Error",
+                  description: response.data.message,
+                });
+              } else {
+                toast({
+                  title: "Upload Successful",
+                  description: `Uploaded ${imageCount} image${imageCount !== 1 ? "s" : ""} and ${videoCount} video${videoCount !== 1 ? "s" : ""}.`,
+                });
+          
+                setUploadedImages((prev) => [
+                  ...prev,
+                  ...Array.from(files)
+                    .filter((f) => f.type.startsWith("image/"))
+                    .map((file) => URL.createObjectURL(file)),
+                ]);
+              }
+            } catch (error) {
               toast({
+                title: "Upload Failed",
+                description: "Failed to upload files. Please try again.",
                 variant: "destructive",
-                title: "Error Fetching Images",
-                description: "There was an error while fetching images."
               });
             }
-            try {
-              const getmsg=await axios.get(`http://localhost:5500/conversations/${caseId}`);
-            //   console.log(getmsg);
-              const updatedMessages = getmsg.data.messages.map(msg => ({
-                ...msg,
-                isBot: msg.senderId === decoded.email
-              }));
-              const username = getmsg.data.mail.split('@')[0];
-              const formattedName = username.charAt(0).toUpperCase() + username.slice(1);
-            //   console.log(formattedName);
-              setofficer(formattedName);
-              
-              
-              setChatMessages(updatedMessages);
-    
-            }catch(err){
-              console.log(err);
+          
+            // Clear input
+            if (e.target) {
+              e.target.value = "";
             }
-    
-    
           };
-        
-          if (caseId) {
-            fetchImages(); 
-          }
-      
-        fetchmail();
-      }, [caseId]);
-
-    useEffect(() => {
-        const handleResize = () => {
-            setIsSmallScreen(window.innerWidth < 768); // 768px is the breakpoint for 'sm' screens in Tailwind CSS
-        };
-
-        handleResize(); // Check screen size initially
-        window.addEventListener('resize', handleResize); // Add event listener for resizing
-
-        return () => {
-            window.removeEventListener('resize', handleResize); // Clean up the event listener
-        };
-
-        
-    }, []);
-
-    
-    
-    useEffect(() => {
-        const fetchEmails = async () => {
-            try {
-                const res = await axios.get(`http://localhost:5500/emails/${caseId}`);
-                const data = res.data;
-                setEmails({
-                    officerEmail: data.officer,
-                    citizenEmail: data.email,
-                });
-            } catch (err) {
-                console.error("Failed to fetch emails:", err);
-            }
-        };
-        
-        if (caseId) fetchEmails();
-        
-        // Request the list of users only once
-        socket.emit("requestUsers");
-        
-        const handleUsers = (userList: any) => {
-            console.log("👥 Received user list:", userList);
-            setUsers(userList);
-        };
-        
-        socket.on("allUsers", handleUsers);
-        
-        // Clean up listener on unmount
-        return () => {
-            socket.off("allUsers", handleUsers);
-        };
-    }, [caseId]);
-    
-
-      useEffect(() => {
-        console.log("📬 Emails:", emails);
-        console.log("👥 Users:", users);
-      }, [emails, users]);
-      
-      useEffect(() => {
-          if (emails?.officerEmail || emails?.citizenEmail) {
-            const myEmail = emails.officerEmail || emails.citizenEmail;
-      
-            const registerUser = () => {
-              console.log("🔁 Registering user after connect/reconnect:", myEmail);
-              socket.emit("registerUser", myEmail);
-            };
-      
-            socket.on("connect", registerUser);
-      
-            return () => {
-              socket.off("connect", registerUser);
-            };
-          }
-        }, [emails]);
-      
-
-
-    
-    
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
-    
-        const formData = new FormData();
-        formData.append("case_id", caseName);
-    
-        // Append each file directly to the formData
-        Array.from(files).forEach((file) => {
-            if (file.type.startsWith("image/")) {
-                formData.append("images", file); // Append image directly to FormData
-            } else {
-                toast({
-                    title: "Invalid File Type",
-                    description: "Only image files are supported.",
-                    variant: "destructive",
-                });
-            }
-        });
-    
-        try {
-            const response = await axios.post("http://localhost:5500/Upload_images", formData, {
-                headers: {
-                    Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
-                },
-            });
-    
-            // Handle server response
-            if (response.data.status !== 200) {
-                toast({
-                    variant: "destructive",
-                    title: "File Upload Error",
-                    description: response.data.message,
-                });
-            } else {
-                toast({
-                    title: "Upload Successful",
-                    description: `Uploaded ${files.length} image${files.length !== 1 ? "s" : ""}.`,
-                });
-    
-                // Optionally handle response here, like refreshing uploaded images
-                setUploadedImages((prev) => [
-                    ...prev,
-                    ...Array.from(files).map((file) => URL.createObjectURL(file)),
-                ]);
-            }
-        } catch (error) {
-            toast({
-                title: "Upload Failed",
-                description: "Failed to upload images. Please try again.",
-                variant: "destructive",
-            });
-        }
-    
-        // Reset file input after upload
-        if (e.target) {
-            e.target.value = "";
-        }
-    };
     
     const handleDeleteImage = (index: number) => {
         const newImages = [...uploadedImages];
@@ -493,6 +523,18 @@ export default function Case() {
 
 
       
+
+
+    const [selectedMedia, setSelectedMedia] = useState(null);
+    
+    const handleMediaClick = (src) => {
+      setSelectedMedia(src);
+    };
+    
+    
+
+
+
 
     return (
         <div className={`flex flex-col h-screen min-h-screen p-6 transition-colors duration-300 ${BgColor}`}>
@@ -839,7 +881,7 @@ export default function Case() {
                         </div>
                     ) : (
                         <div className="p-4 space-y-3">
-                            {uploadedImages.map((src, index) => (
+                            {/* {uploadedImages.map((src, index) => (
                                 <div
                                     key={index}
                                     className={`relative group rounded-md border overflow-hidden flex items-center p-2 hover:bg-accent cursor-pointer ${selectedImage === src ? 'bg-accent/60' : ''}`}
@@ -868,7 +910,57 @@ export default function Case() {
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
                                 </div>
-                            ))}
+                            ))} */}
+                            {uploadedImages.map((src, index) => {
+                                const isVideo = src.match(/\.(mp4|webm|ogg)$/i);
+                                return (
+                                <div
+                                    key={index}
+                                    className={`relative group rounded-md border overflow-hidden flex items-center p-2 hover:bg-accent cursor-pointer ${
+                                    selectedMedia === src ? 'bg-accent/60' : ''
+                                    }`}
+                                    onClick={() => handleMediaClick(src)}
+                                >
+                                    <div className="h-16 w-16 rounded overflow-hidden mr-3 flex-shrink-0">
+                                    {isVideo ? (
+                                        <video
+                                        src={src}
+                                        className="h-full w-full object-cover"
+                                        muted
+                                        loop
+                                        playsInline
+                                        />
+                                    ) : (
+                                        <img
+                                        src={src}
+                                        alt={`Evidence ${index + 1}`}
+                                        className="h-full w-full object-cover"
+                                        />
+                                    )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                    <p className="font-medium truncate">Evidence {index + 1}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {isVideo ? 'Video' : 'Image'} • Added {new Date().toLocaleDateString()}
+                                    </p>
+                                    </div>
+                                    <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="opacity-0 group-hover:opacity-100"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        // handleDeleteMedia(index);
+                                    }}
+                                    >
+                                    <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                );
+                            })}
+
+
+
 
                             <div className="pt-3">
                                 {canMessage && uploadedImages.length > 0 && (
@@ -949,15 +1041,26 @@ export default function Case() {
                                     Upload images
                                 </Button>
                             </div>
-                        ) : selectedImage ? (
+                        ) : selectedMedia ? (
                             <div className="flex flex-col w-full max-w-3xl h-full">
-                                <div className="relative flex-1 flex items-center justify-center bg-black/5 rounded-lg overflow-hidden">
-                                    <img
-                                        src={selectedImage}
-                                        alt="Selected evidence"
-                                        className="max-w-full max-h-full object-contain"
-                                    />
-                                </div>
+                                
+                                    <div className="mt-4">
+                                        {selectedMedia.match(/\.(mp4|webm|ogg)$/i) ? (
+                                        <video
+                                            src={selectedMedia}
+                                            controls
+                                            autoPlay
+                                            className="w-full max-h-[500px] rounded-lg shadow"
+                                        />
+                                        ) : (
+                                        <img
+                                            src={selectedMedia}
+                                            alt="Selected Evidence"
+                                            className="w-full max-h-[500px] rounded-lg shadow"
+                                        />
+                                        )}
+                                    </div>
+                                    
                                 <div className="mt-4 flex gap-4">
                                     {selectedImage && (
                                         <Button
@@ -1151,4 +1254,6 @@ function formatDate(dateString: string): string {
     };
     return new Date(dateString).toLocaleDateString(undefined, options);
   }
+
+
 
