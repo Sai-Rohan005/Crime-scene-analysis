@@ -48,9 +48,9 @@ import {
 } from "lucide-react";
 import { ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { io } from 'socket.io-client';
-import socket from "./socket";
+import socket from './socket';
 import { jwtDecode } from "jwt-decode";
+
 
 
 
@@ -97,12 +97,24 @@ export default function Case() {
     const [messageInput, setMessageInput] = useState('');
 
 
+
+    useEffect(() => {
+      const con = async()=>{
+          if (!socket.connected) {
+              await socket.connect();
+            }
+  
+      }
+      con();
+      
+    }, []);
+    
     useEffect(() => {
       const fetchImages = async () => {
         try {
           // Fetch images for the given caseId
           const response = await axios.get(`http://localhost:5500/get_case_images/${caseId}`);
-          console.log("Response from backend:", response); // Log the entire response
+          // console.log("Response from backend:", response); // Log the entire response
     
           if (response.data && Array.isArray(response.data.images)) {
             const { images } = response.data; // Get images array from response
@@ -144,37 +156,47 @@ export default function Case() {
     
     }, [caseId, toast,uploadedImages]); // Effect triggers when caseId changes
     
+    // Simplify the socket connection management
     useEffect(() => {
-        if (decoded.email) {
+      if (!decoded?.email) return;
     
-          const registerUser = () => {
-            console.log("🔁 Registering user after connect/reconnect:", decoded.email);
-            socket.emit("registerUser", decoded.email);
-          };
-    
-          socket.on("connect", registerUser);
-    
-          return () => {
-            socket.off("connect", registerUser);
-          };
-        }
-      }, [decoded.email]);
-
-    useEffect(() => {
-      const handleIncomingCall = (data) => {
-        console.log("Invoked");
-        setIsIncomingCall(true);
-        setCallSignal(data.signalData);
-        setCallerId(data.from);
+      const registerUser = () => {
+        console.log("🔁 Emitting registerUser for:", decoded.email);
+        socket.emit("registerUser", decoded.email, (response) => {
+          if (response?.success) {
+            console.log("✅ Registered successfully");
+          } else {
+            console.error("❌ Register failed:", response?.error);
+          }
+        });
       };
     
-      socket.on('incomingCall', handleIncomingCall);
-      
+      socket.on("connect", registerUser);
+    
+      if (socket.connected) {
+        registerUser(); // In case already connected before listener added
+      }
     
       return () => {
-        socket.off('incomingCall', handleIncomingCall);
+        socket.off("connect", registerUser);
       };
-    }, []);
+    }, [decoded?.email]);
+    
+
+// Handle incoming calls
+  useEffect(() => {
+    const handleIncomingCall = ({ signalData, from }) => {
+      setCallSignal(signalData);
+      setCallerId(from);
+      setIsIncomingCall(true);
+    };
+
+    socket.on('incomingCall', handleIncomingCall);
+    
+    return () => {
+      socket.off('incomingCall', handleIncomingCall);
+    };
+  }, []);
 
     
   

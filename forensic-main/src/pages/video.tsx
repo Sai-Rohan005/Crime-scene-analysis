@@ -3,11 +3,8 @@ import io from "socket.io-client";
 import Peer from "simple-peer";
 import axios from 'axios';
 import { useParams } from "react-router-dom";
+import socket from './socket';
 
-const socket = io('http://localhost:5500', {
-  withCredentials: true,
-  transports: ['websocket', 'polling'],
-});
 
 interface EmailProps {
   officerEmail: string;

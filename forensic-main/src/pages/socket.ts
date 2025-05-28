@@ -1,9 +1,12 @@
-import { io, Socket } from "socket.io-client";
+// socket.ts
+import { io } from "socket.io-client";
 
-const socket: Socket = io('http://localhost:5500', {
-  withCredentials: true,
+const socket = io("http://localhost:5500", {
+  transports: ["websocket"],
   autoConnect: false,
-  transports: ['websocket'],
+  withCredentials: true,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
 });
 
 export default socket;

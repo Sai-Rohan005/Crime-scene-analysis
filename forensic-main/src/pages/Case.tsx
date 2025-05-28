@@ -55,15 +55,8 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import { Textarea } from "@/components/ui/textarea";
-
-
-import { io } from 'socket.io-client';
 import socket from './socket';
-// const socket = io('http://localhost:5500', {
-//     withCredentials: true,
-//     autoConnect: false,
-//     transports: ['websocket', 'polling'],
-//   });
+
 
 export default function Case() {
     const { caseId } = useParams();
@@ -114,9 +107,7 @@ export default function Case() {
   useEffect(() => {
     const con = async()=>{
         if (!socket.connected) {
-            console.log("🌐 Connecting socket...");
             await socket.connect();
-            console.log("connected sucessfully");
           }
 
     }
@@ -124,6 +115,8 @@ export default function Case() {
     
   }, []);
 
+
+  
   // 2️⃣ Fetch emails after caseId is available
   useEffect(() => {
     if (!caseId) return;
@@ -144,27 +137,53 @@ export default function Case() {
   }, [caseId]);
 
   // 3️⃣ Register user after emails are set and socket is ready
+
+
   useEffect(() => {
     if (!emails) return;
-
-    const myEmail = emails.officerEmail || emails.citizenEmail;
-    if (!myEmail) return;
-
+  
+    const email = emails.officerEmail || emails.citizenEmail;
+    if (!email) return;
+  
     const registerUser = () => {
-      console.log("🔁 Registering socket user:", myEmail);
-      socket.emit("registerUser", myEmail);
+      console.log("📨 Emitting registerUser for:", email);
+      socket.emit("registerUser", email, (res) => {
+        if (res.success) {
+          console.log("✅ Registered user:", email);
+        } else {
+          console.error("❌ Register failed:", res.error);
+        }
+      });
     };
-
-    if (socket.connected) {
+  
+    const onConnect = () => {
+      console.log("🔌 Socket connected:", socket.id);
       registerUser();
+    };
+  
+    // Cleanup first to prevent duplicates
+    socket.off("connect", onConnect);
+    socket.on("connect", onConnect);
+  
+    // Force reconnection if not already
+    if (!socket.connected) {
+      socket.connect();
     } else {
-      socket.once("connect", registerUser);
+      // Already connected? Go ahead.
+      registerUser();
     }
-
+  
     return () => {
-      socket.off("connect", registerUser);
+      socket.off("connect", onConnect);
     };
   }, [emails]);
+  
+  
+  
+  
+
+
+  
 
   // 4️⃣ Request users list once after connect
   useEffect(() => {
@@ -257,7 +276,9 @@ export default function Case() {
     console.log("📬 Emails:", emails);
     console.log("👥 Users:", users);
     console.log("🔌 Socket connected:", socket.connected);
+    console.log("🧪 Socket ID:", socket.id);
   }, [emails, users]);
+  
       
 
 
@@ -625,12 +646,12 @@ export default function Case() {
                                             
                                             
                                             // Emitting event to start the call
-                                            socket.emit('callUserByEmail', {
-                                                email,
-                                                signalData: 'yourSignalData', 
-                                                from:  emails?.officerEmail ?? '', // Replace with actual officer's email
+                                            socket.emit('callUser', {
+                                                userToCall: email, // ✅ this is correct
+                                                signalData: 'yourSignalData',
+                                                from: emails?.officerEmail ?? '',
+                                              });
                                               
-                                            });
 
                                             // Navigate to the route after emitting
                                             navigate(`/video/${caseId}`);
