@@ -1103,6 +1103,16 @@ app.post('/reset-password', async (req, res) => {
     return res.status(500).json({ status: 500, message: "Something went wrong" });
   }
 });
+
+
+app.get('/usermail',authenticateToken,(req,res)=>{
+  
+  const usermail=req.user;
+  res.json({
+    status:200,
+    mail:usermail
+  })
+})
   
 
 

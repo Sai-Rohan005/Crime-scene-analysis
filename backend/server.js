@@ -120,6 +120,10 @@ io.on('connection', (socket) => {
       if (callback) callback({ success: false, error: error.message });
     }
   });
+
+  socket.on("ice-candidate", ({ to, candidate }) => {
+    io.to(to).emit("ice-candidate", { candidate });
+  });
   
 
   // Handle call acceptance
@@ -132,6 +136,11 @@ io.on('connection', (socket) => {
       if (callback) callback({ success: false, error: error.message });
     }
   });
+
+  socket.on("reject-call", ({ to }) => {
+    io.to(to).emit("call-rejected");
+  });
+  
 
   // Handle socket disconnect
   socket.on('disconnect', () => {

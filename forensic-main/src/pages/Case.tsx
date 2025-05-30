@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
+import useCaseManagement  from "./hooks/useCaseManagement";
 import axios from 'axios'
 import {
     DropdownMenu,
@@ -45,6 +46,7 @@ import {
   Microscope,
   Plus,
   Scroll,
+  Search,
   Settings,
   Share,
   Trash2,
@@ -56,17 +58,30 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import { Textarea } from "@/components/ui/textarea";
 import socket from './socket';
+import { Tabs, TabsList, TabsTrigger } from "@radix-ui/react-tabs";
+import { ImageUpload } from "./components/ImageUpload";
+import { ImageGallery } from "./components/ImageGallery";
+import { AnalysisTools } from "./components/AnalysisTools";
+import { ResultsDisplay } from "./components/ResultsDisplay";
+import ChatInterface from "@/components/ChatInterface";
+import DocsInterface from "./components/DocsInterface";
+import LoadingOverlay from "@/components/LoadingOverlay";
+
+interface ImageFile {
+  file: File;
+  preview: string;
+}
+
 
 
 export default function Case() {
     const { caseId } = useParams();
     const [caseName, setCaseName] = useState(`Case #${caseId?.replace("case-", "")}`);
-    const [uploadedImages, setUploadedImages] = useState<string[]>([]);
-    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    // const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+    // const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [summary, setSummary] = useState<string | null>(null);
     const [typedSummary, setTypedSummary] = useState<string>("");
-    const [activeTab, setActiveTab] = useState<"sources" | "chat" | "studio">("sources");
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    // const [isAnalyzing, setIsAnalyzing] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { toast } = useToast();
     const isMobile = useIsMobile();
@@ -85,8 +100,13 @@ export default function Case() {
     const [sortDirection, setSortDirection] = useState("desc");
     const [emails, setEmails] = useState<{ officerEmail: string; citizenEmail: string } | null>(null);
     const [users, setUsers] = useState<{ [email: string]: string }>({});
+    const [videocallingon,setvideocallingon]=useState(false);
+    const localVideo = useRef<HTMLVideoElement>(null);
+    const remoteVideo = useRef<HTMLVideoElement>(null);
+    const peerRef = useRef<RTCPeerConnection>();
+    const [userImages,setuserImages]=useState<string[]>([]);
 
-
+    const [activeTab, setActiveTab] = useState<"sources" | "chat" | "studio" | "docs">("studio");
 
     const navigate=useNavigate();
 
@@ -99,7 +119,26 @@ export default function Case() {
         }
     };
 
+    const {
+      uploadedImages,
+      selectedImage,
+      isAnalyzing,
+      isProcessing,
+      analysisResults,
+      caseReport,
+      enhancedImage,
+      analyzedImages,
+      objectDetectionResults,
+      setSelectedImage,
+      handleFileUpload,
+      handleDeleteImage,
+      analyzeEvidence,
+      fetchCaseReport,
+      handleImageEnhancement,
+      detectObjects,
+    } = useCaseManagement(caseId); 
 
+    
       
 
   
@@ -213,52 +252,52 @@ export default function Case() {
   }, [caseId]);
 
   // 5️⃣ Fetch other data (images, messages)
-  useEffect(() => {
-    if (!caseId) return;
+  // useEffect(() => {
+  //   if (!caseId) return;
 
-    const fetchMail = async () => {
-      try {
-        const respmail = await axios.get(`http://localhost:5500/filer/${caseId}`);
-        if (respmail.data.status === 200) {
-          setcanMessage(true);
-        }
-      } catch (err) {
-        console.error("❌ Failed to fetch filer email:", err);
-      }
-    };
+  //   const fetchMail = async () => {
+  //     try {
+  //       const respmail = await axios.get(`http://localhost:5500/filer/${caseId}`);
+  //       if (respmail.data.status === 200) {
+  //         setcanMessage(true);
+  //       }
+  //     } catch (err) {
+  //       console.error("❌ Failed to fetch filer email:", err);
+  //     }
+  //   };
 
-    const fetchImagesAndMessages = async () => {
-      try {
-        const response = await axios.get(`http://localhost:5500/get_case_images/${caseId}`);
-        if (response.data?.images) {
-          const imageUrls = response.data.images.map(
-            (img) => `http://localhost:5500/images/${img.imageUrl}`
-          );
-          setUploadedImages(imageUrls);
-        }
-      } catch (err) {
-        console.error("❌ Error fetching images:", err);
-      }
+  //   const fetchImagesAndMessages = async () => {
+  //     try {
+  //       const response = await axios.get(`http://localhost:5500/get_case_images/${caseId}`);
+  //       if (response.data?.images) {
+  //         const imageUrls = response.data.images.map(
+  //           (img) => `http://localhost:5500/images/${img.imageUrl}`
+  //         );
+  //         setUploadedImages(imageUrls);
+  //       }
+  //     } catch (err) {
+  //       console.error("❌ Error fetching images:", err);
+  //     }
 
-      try {
-        const msgRes = await axios.get(`http://localhost:5500/conversations/${caseId}`);
-        const updatedMessages = msgRes.data.messages.map((msg) => ({
-          ...msg,
-          isBot: msg.senderId === (emails?.officerEmail || emails?.citizenEmail),
-        }));
+  //     try {
+  //       const msgRes = await axios.get(`http://localhost:5500/conversations/${caseId}`);
+  //       const updatedMessages = msgRes.data.messages.map((msg) => ({
+  //         ...msg,
+  //         isBot: msg.senderId === (emails?.officerEmail || emails?.citizenEmail),
+  //       }));
 
-        const username = msgRes.data.mail.split("@")[0];
-        const formatted = username.charAt(0).toUpperCase() + username.slice(1);
-        setofficer(formatted);
-        setChatMessages(updatedMessages);
-      } catch (err) {
-        console.error("❌ Error fetching messages:", err);
-      }
-    };
+  //       const username = msgRes.data.mail.split("@")[0];
+  //       const formatted = username.charAt(0).toUpperCase() + username.slice(1);
+  //       setofficer(formatted);
+  //       setChatMessages(updatedMessages);
+  //     } catch (err) {
+  //       console.error("❌ Error fetching messages:", err);
+  //     }
+  //   };
 
-    fetchMail();
-    fetchImagesAndMessages();
-  }, [caseId, emails,uploadedImages]);
+  //   fetchMail();
+  //   fetchImagesAndMessages();
+  // }, [caseId, emails,uploadedImages]);
 
   // 6️⃣ Handle responsive screen size
   useEffect(() => {
@@ -279,92 +318,184 @@ export default function Case() {
     console.log("🧪 Socket ID:", socket.id);
   }, [emails, users]);
   
-      
+  useEffect(()=>{
 
-
-    
-    
-        const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-            const files = e.target.files;
-            if (!files || files.length === 0) return;
-          
-            const formData = new FormData();
-            formData.append("case_id", caseName);
-          
-            let imageCount = 0;
-            let videoCount = 0;
-          
-            Array.from(files).forEach((file) => {
-              if (file.type.startsWith("image/")) {
-                formData.append("images", file); // same key used for multiple images
-                imageCount++;
-              } else if (file.type.startsWith("video/")) {
-                formData.append("videos", file); // same key used for multiple videos
-                videoCount++;
-              } else {
-                toast({
-                  title: "Invalid File Type",
-                  description: `Unsupported file type: ${file.name}`,
-                  variant: "destructive",
-                });
-              }
-            });
-          
-            try {
-              const response = await axios.post("http://localhost:5500/Upload_media", formData, {
-                headers: {
-                  Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
-                },
-              });
-          
-              if (response.data.status !== 200) {
-                toast({
-                  variant: "destructive",
-                  title: "File Upload Error",
-                  description: response.data.message,
-                });
-              } else {
-                toast({
-                  title: "Upload Successful",
-                  description: `Uploaded ${imageCount} image${imageCount !== 1 ? "s" : ""} and ${videoCount} video${videoCount !== 1 ? "s" : ""}.`,
-                });
-          
-                setUploadedImages((prev) => [
-                  ...prev,
-                  ...Array.from(files)
-                    .filter((f) => f.type.startsWith("image/"))
-                    .map((file) => URL.createObjectURL(file)),
-                ]);
-              }
-            } catch (error) {
-              toast({
-                title: "Upload Failed",
-                description: "Failed to upload files. Please try again.",
-                variant: "destructive",
-              });
-            }
-          
-            // Clear input
-            if (e.target) {
-              e.target.value = "";
-            }
-          };
-    
-    const handleDeleteImage = (index: number) => {
-        const newImages = [...uploadedImages];
-        newImages.splice(index, 1);
-        setUploadedImages(newImages);
-
-        toast({
-            title: "Image Deleted",
-            description: "The image has been removed from your case.",
-        });
-
-        if (selectedImage === uploadedImages[index]) {
-            setSelectedImage(null);
-            setSummary(null);
+    const fetchMail = async () => {
+      try {
+        const respmail = await axios.get(`http://localhost:5500/filer/${caseId}`);
+        if (respmail.data.status === 200) {
+          setcanMessage(true);
         }
+      } catch (err) {
+        console.error("❌ Failed to fetch filer email:", err);
+      }
     };
+    
+
+
+      const fetchMessages = async () => {
+
+      try {
+        const msgRes = await axios.get(`http://localhost:5500/conversations/${caseId}`);
+        const updatedMessages = msgRes.data.messages.map((msg) => ({
+          ...msg,
+          isBot: msg.senderId === (emails?.officerEmail || emails?.citizenEmail),
+        }));
+
+        const username = msgRes.data.mail.split("@")[0];
+        const formatted = username.charAt(0).toUpperCase() + username.slice(1);
+        setofficer(formatted);
+        setChatMessages(updatedMessages);
+      } catch (err) {
+        console.error("❌ Error fetching messages:", err);
+      }
+    };
+    fetchMessages();
+    fetchMail();
+
+  },[caseId, emails,uploadedImages])    
+
+
+  useEffect(()=>{
+      const fetchImagesAndMessages = async () => {
+        try {
+          const response = await axios.get(`http://localhost:5500/get_case_images/${caseId}`);
+          if (response.data?.images) {
+            const imageUrls = response.data.images.map(
+              (img) => `http://localhost:5500/images/${img.imageUrl}`
+            );
+            setuserImages(imageUrls);
+
+            const imageFiles: ImageFile[] = await Promise.all(
+              imageUrls.map(async (url) => {
+                const res = await fetch(url);
+                const blob = await res.blob();
+                const filename = url.split("/").pop() || "image.jpg";
+                const file = new File([blob], filename, { type: blob.type });
+                const preview = URL.createObjectURL(file);
+    
+                return { file, preview }; // Assuming ImageFile has { file, preview }
+              })
+            );
+    
+            // ✅ Now call handleFileUpload with the processed files
+            handleFileUpload(imageFiles);
+
+          }
+        } catch (err) {
+          console.error("❌ Error fetching images:", err);
+        }
+      };
+      // async function uploadImagesFromUrls(imageUrls) {
+      //   try {
+      //     const formData = new FormData();
+      
+      //     // Loop over image URLs and fetch each one as a Blob
+      //     for (const url of imageUrls) {
+      //       const response = await fetch(url);
+      //       const blob = await response.blob();
+      
+      //       // Create a File object from the Blob
+      //       const filename = url.split('/').pop() || 'downloaded-image.jpg';
+      //       const file = new File([blob], filename, { type: blob.type });
+      
+      //       // handleFileUpload(file);
+      //     }
+      
+      //   } catch (error) {
+      //     console.error('Failed to upload images:', error);
+      //   }
+      // }
+      // userImages.forEach((url)=>{
+      //   uploadImagesFromUrls(url);
+      // })
+      
+      fetchImagesAndMessages();
+  },[canMessage])
+
+    
+    
+        // const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        //     const files = e.target.files;
+        //     if (!files || files.length === 0) return;
+          
+        //     const formData = new FormData();
+        //     formData.append("case_id", caseName);
+          
+        //     let imageCount = 0;
+        //     let videoCount = 0;
+          
+        //     Array.from(files).forEach((file) => {
+        //       if (file.type.startsWith("image/")) {
+        //         formData.append("images", file); // same key used for multiple images
+        //         imageCount++;
+        //       } else if (file.type.startsWith("video/")) {
+        //         formData.append("videos", file); // same key used for multiple videos
+        //         videoCount++;
+        //       } else {
+        //         toast({
+        //           title: "Invalid File Type",
+        //           description: `Unsupported file type: ${file.name}`,
+        //           variant: "destructive",
+        //         });
+        //       }
+        //     });
+          
+        //     try {
+        //       const response = await axios.post("http://localhost:5500/Upload_media", formData, {
+        //         headers: {
+        //           Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+        //         },
+        //       });
+          
+        //       if (response.data.status !== 200) {
+        //         toast({
+        //           variant: "destructive",
+        //           title: "File Upload Error",
+        //           description: response.data.message,
+        //         });
+        //       } else {
+        //         toast({
+        //           title: "Upload Successful",
+        //           description: `Uploaded ${imageCount} image${imageCount !== 1 ? "s" : ""} and ${videoCount} video${videoCount !== 1 ? "s" : ""}.`,
+        //         });
+          
+        //         setUploadedImages((prev) => [
+        //           ...prev,
+        //           ...Array.from(files)
+        //             .filter((f) => f.type.startsWith("image/"))
+        //             .map((file) => URL.createObjectURL(file)),
+        //         ]);
+        //       }
+        //     } catch (error) {
+        //       toast({
+        //         title: "Upload Failed",
+        //         description: "Failed to upload files. Please try again.",
+        //         variant: "destructive",
+        //       });
+        //     }
+          
+        //     // Clear input
+        //     if (e.target) {
+        //       e.target.value = "";
+        //     }
+        //   };
+    
+    // const handleDeleteImage = (index: number) => {
+    //     const newImages = [...uploadedImages];
+    //     newImages.splice(index, 1);
+    //     setUploadedImages(newImages);
+
+    //     toast({
+    //         title: "Image Deleted",
+    //         description: "The image has been removed from your case.",
+    //     });
+
+    //     if (selectedImage === uploadedImages[index]) {
+    //         setSelectedImage(null);
+    //         setSummary(null);
+    //     }
+    // };
 
     const handleImageClick = (imageSrc: string) => {
         setSelectedImage(imageSrc);
@@ -428,16 +559,16 @@ export default function Case() {
     };
     
 
-    const analyzeEvidence = () => {
-        setIsAnalyzing(true);
-        toast({ title: "Analysis Started", description: "Analyzing your evidence..." });
+    // const analyzeEvidence = () => {
+    //     setIsAnalyzing(true);
+    //     toast({ title: "Analysis Started", description: "Analyzing your evidence..." });
 
-        setTimeout(() => {
-            setIsAnalyzing(false);
-            if (!isMobile) setActiveTab("studio");
-            toast({ title: "Analysis Complete", description: "View results in Studio tab." });
-        }, 2000);
-    };
+    //     setTimeout(() => {
+    //         setIsAnalyzing(false);
+    //         if (!isMobile) setActiveTab("studio");
+    //         toast({ title: "Analysis Complete", description: "View results in Studio tab." });
+    //     }, 2000);
+    // };
 
 
 
@@ -552,12 +683,191 @@ export default function Case() {
       setSelectedMedia(src);
     };
     
+
+
+    useEffect(() => {
+      socket.emit("register", "police");
+  
+      socket.on("call-answered", async ({ answer }) => {
+        await peerRef.current?.setRemoteDescription(new RTCSessionDescription(answer));
+      });
+  
+      socket.on("ice-candidate", ({ candidate }) => {
+        peerRef.current?.addIceCandidate(new RTCIceCandidate(candidate));
+      });
+    }, []);
+  
+    const startCall = async () => {
+      peerRef.current = new RTCPeerConnection();
+      peerRef.current.ontrack = (event) => {
+        if (remoteVideo.current) {
+          remoteVideo.current.srcObject = event.streams[0];
+        }
+      };
+  
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      if (localVideo.current) localVideo.current.srcObject = stream;
+      stream.getTracks().forEach((track) => peerRef.current?.addTrack(track, stream));
+  
+      const offer = await peerRef.current.createOffer();
+      await peerRef.current.setLocalDescription(offer);
+      socket.emit("call-citizen", offer);
+  
+      peerRef.current.onicecandidate = (e) => {
+        if (e.candidate) {
+          socket.emit("ice-candidate", { to: "citizen", candidate: e.candidate }); // optional: improve routing
+        }
+      };
+    };
+
+
+
+
+
+      const [userId, setUserId] = useState<string | null>(null);
+
+      const [isDetectingObjects, setIsDetectingObjects] = useState(false);
+    
+      // Add a new state to track whether to show the annotated image
+      const [showAnnotatedImage, setShowAnnotatedImage] = useState(true);
+    
+      // Add a state to store annotated images for each uploaded image
+      const [annotatedImages, setAnnotatedImages] = useState<Record<string, string>>({});
+
+    // Dropdown menu is already imported above — just need to define the JSX logic to render later in the return
+      
+      const [email, setEmail] = useState('');
+      const [customMessage, setCustomMessage] = useState('');
+    
+      // Get the user ID from sessionStorage when component mounts
+      useEffect(() => {
+        const storedUserId = sessionStorage.getItem("userid") || localStorage.getItem("user");
+        setUserId(storedUserId);
+      }, []);
+    
+// Pass caseId to the hook
+    
+      // Function to handle back button click
+      const handleBackClick = () => {
+        if (userId) {
+          navigate(`/dashboard/${userId}`);
+        } else {
+          navigate('/dashboard');
+        }
+      };
+    
+      const handleDownloadReport = () => {
+        if (!caseReport) return;
+        
+        const blob = new Blob([caseReport], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `case-report-${caseId}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      };
+    
+      function handlePatternRecognition(): void {
+        throw new Error("Function not implemented.");
+      }
+      
+    
+      // Inside the component, add a console log to debug
+      useEffect(() => {
+        console.log("Selected image:", selectedImage);
+        console.log("Uploaded images:", uploadedImages);
+      }, [selectedImage, uploadedImages]);
+      sessionStorage.setItem("caseId", caseId);
+      // Update the detectObjects function to store the annotated image
+      useEffect(() => {
+        if (objectDetectionResults && 
+            objectDetectionResults.results && 
+            objectDetectionResults.results.length > 0 &&
+            objectDetectionResults.results[0].detected_objects &&
+            objectDetectionResults.results[0].detected_objects.annotated_image &&
+            selectedImage) {
+          // Store the annotated image for this selected image
+          setAnnotatedImages(prev => ({
+            ...prev,
+            [selectedImage]: objectDetectionResults.results[0].detected_objects.annotated_image
+          }));
+        }
+      }, [objectDetectionResults, selectedImage]);
+    const getInitials = (fullName) => {
+      return  fullName.trim()[0].toUpperCase();
+    };
+    ;
+    
+
+      const [initials, setInitials] = useState("");
+    
+
+    
+      const sendInvitation = async () => {
+    
+        if (!email) {
+          toast({
+            title: "Missing Email",
+            description: "Please enter an email address.",
+            variant: "destructive",
+          });
+          return;
+        }
+        console.log("Sending invitation email to:", email);
+    
+        try {
+          const res = await fetch("http://localhost:5000/api/invitation/send-invitation", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              // Authorization: `Bearer ${sessionStorage.getItem("authToken")}` // Uncomment if needed
+            },
+            body: JSON.stringify({
+              email
+            }),
+          });
+    
+          const data = await res.json();
+    
+          if (res.ok) {
+            toast({
+              title: "Invitation Sent",
+              description: `Invitation sent to ${email}`,
+            });
+            setEmail("");
+            setCustomMessage("");
+          } else {
+            toast({
+              title: "Failed to Send",
+              description: data.message || "Something went wrong.",
+              variant: "destructive",
+            });
+          }
+        } catch (error) {
+          toast({
+            title: "Error",
+            description: "An unexpected error occurred while sending the invitation.",
+            variant: "destructive",
+          });
+        }
+      };
+  
+
+
+    
     
 
 
 
 
     return (
+      <>
+
+        {!videocallingon ? (
+
         <div className={`flex flex-col h-screen min-h-screen p-6 transition-colors duration-300 ${BgColor}`}>
             <header className="flex items-center justify-between p-4 border-b">
                 <div className="flex items-center gap-4">
@@ -576,51 +886,7 @@ export default function Case() {
                     <div className="hidden sm:flex flex-wrap items-center gap-2">
                         {/* Message Dialog */}
                         {canMessage && (
-                        // <Dialog open={ShowMessageDialog} onOpenChange={setShowMessageDialog}>
-                        //     <DialogTrigger asChild>
-                        //     <Button variant="outline" size="sm">
-                        //         <MessageCircle className="w-4 h-4 mr-2" />
-                        //         Message
-                        //     </Button>
-                        //     </DialogTrigger>
-                        //     <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
-                        //     <div className="flex-1 flex flex-col overflow-hidden min-h-0 h-[60vh]">
-                        //         <div className="flex items-center justify-between p-4 border-b bg-slate-500 text-white">
-                        //         <DialogTitle>
-                        //             <span className="text-xl font-semibold">{officer}</span>
-                        //         </DialogTitle>
-                        //         </div>
-
-                        //         <div className="flex-1 flex flex-col p-4 bg-gray-100 overflow-auto min-h-0">
-                        //         <div className="space-y-4">
-                        //             {chatMessages.map((msg, index) => (
-                        //             <div key={index} className={`flex ${msg.isBot ? "justify-start" : "justify-end"}`}>
-                        //                 <div className={`max-w-xs p-3 rounded-lg ${msg.isBot ? "bg-muted" : "bg-primary text-white"}`}>
-                        //                 <p className="text-sm">{msg.text}</p>
-                        //                 </div>
-                        //             </div>
-                        //             ))}
-                        //         </div>
-                        //         </div>
-                        //         <div className="flex items-center space-x-2 p-4 border-t bg-white">
-                        //         <input
-                        //             type="text"
-                        //             className="flex-1 p-2 border rounded-md"
-                        //             placeholder="Type a message..."
-                        //             value={messageInput}
-                        //             onChange={(e) => setMessageInput(e.target.value)}
-                        //         />
-                        //         <button
-                        //             className="px-4 py-2 bg-blue-500 text-white rounded-md"
-                        //             onClick={sendMessage}
-                        //             disabled={messageInput.trim() === ""}
-                        //         >
-                        //             Send
-                        //         </button>
-                        //         </div>
-                        //     </div>
-                        //     </DialogContent>
-                        // </Dialog>
+                        
                         <Dialog open={ShowMessageDialog} onOpenChange={setShowMessageDialog}>
                         <DialogTrigger asChild>
                             <Button variant="outline" size="sm">
@@ -865,7 +1131,7 @@ export default function Case() {
 
             </header>
             <div className="flex flex-1 overflow-hidden">
-                <div className={`w-96 border-r overflow-y-auto flex flex-col ${activeTab === "sources" ? "block" : "hidden md:block"}`}>
+                {/* <div className={`w-96 border-r overflow-y-auto flex flex-col ${activeTab === "sources" ? "block" : "hidden md:block"}`}>
                     <div className="flex items-center justify-between p-4 border-b">
                         <h2 className="font-semibold">Evidence Images</h2>
                         <Button variant="ghost" size="icon">
@@ -902,36 +1168,7 @@ export default function Case() {
                         </div>
                     ) : (
                         <div className="p-4 space-y-3">
-                            {/* {uploadedImages.map((src, index) => (
-                                <div
-                                    key={index}
-                                    className={`relative group rounded-md border overflow-hidden flex items-center p-2 hover:bg-accent cursor-pointer ${selectedImage === src ? 'bg-accent/60' : ''}`}
-                                    onClick={() => handleImageClick(src)}
-                                >
-                                    <div className="h-16 w-16 rounded overflow-hidden mr-3 flex-shrink-0">
-                                        <img
-                                            src={src}
-                                            alt={`Evidence ${index + 1}`}
-                                            className="h-full w-full object-cover"
-                                        />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-medium truncate">Evidence image {index + 1}</p>
-                                        <p className="text-xs text-muted-foreground">Image • Added {new Date().toLocaleDateString()}</p>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="opacity-0 group-hover:opacity-100"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDeleteImage(index);
-                                        }}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            ))} */}
+                            
                             {uploadedImages.map((src, index) => {
                                 const isVideo = src.match(/\.(mp4|webm|ogg)$/i);
                                 return (
@@ -1027,8 +1264,8 @@ export default function Case() {
                     </div>
                     )
                     }
-                </div>
-                <div className={`flex-1 flex flex-col ${activeTab === "chat" ? "block" : "hidden md:block"} overflow-y-auto`}>
+                </div> */}
+                {/* <div className={`flex-1 flex flex-col ${activeTab === "chat" ? "block" : "hidden md:block"} overflow-y-auto`}>
                     <div className="flex items-center justify-between p-4 border-b">
                         <h2 className="font-semibold">Image Preview</h2>
                         <div className="flex gap-1">
@@ -1131,10 +1368,371 @@ export default function Case() {
                             </div>
                         )}
                     </div>
+                </div> */}
+                {!canMessage ? (
+
+                <div className={`w-full md:w-80 border-r overflow-y-auto flex flex-col ${activeTab === "sources" ? "block" : "hidden md:block"}`}>
+                          <div className="flex items-center justify-between p-4 border-b">
+                            <h2 className="font-semibold">Evidence Images</h2>
+                          </div>
+                          
+                          <ImageUpload onUpload={handleFileUpload} />
+                          <ImageGallery
+                            images={uploadedImages}
+                            selectedImage={selectedImage}
+                            onSelectImage={setSelectedImage}
+                            onDeleteImage={handleDeleteImage}
+                          />
+                          
+                          {/* Add Analyze Evidence button below the images */}
+                          {uploadedImages.length > 0 && (
+                            <div className="p-4 border-t mt-auto">
+                              <Button 
+                                className="w-full" 
+                                onClick={analyzeEvidence}
+                                disabled={isAnalyzing}
+                              >
+                                {isAnalyzing ? (
+                                  <>
+                                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                                    Analyzing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Microscope className="h-4 w-4 mr-2" />
+                                    Analyze Evidence
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
                 </div>
+                ):(
+                  <div className="p-4 space-y-3">
+                            
+                            {userImages.map((src, index) => {
+                                const isVideo = src.match(/\.(mp4|webm|ogg)$/i);
+                                return (
+                                <div
+                                    key={index}
+                                    className={`relative group rounded-md border overflow-hidden flex items-center p-2 hover:bg-accent cursor-pointer ${
+                                    selectedMedia === src ? 'bg-accent/60' : ''
+                                    }`}
+                                    onClick={() => handleMediaClick(src)}
+                                >
+                                    <div className="h-16 w-16 rounded overflow-hidden mr-3 flex-shrink-0">
+                                    {isVideo ? (
+                                        <video
+                                        src={src}
+                                        className="h-full w-full object-cover"
+                                        muted
+                                        loop
+                                        playsInline
+                                        />
+                                    ) : (
+                                        <img
+                                        src={src}
+                                        alt={`Evidence ${index + 1}`}
+                                        className="h-full w-full object-cover"
+                                        />
+                                    )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                    <p className="font-medium truncate">Evidence {index + 1}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {isVideo ? 'Video' : 'Image'} • Added {new Date().toLocaleDateString()}
+                                    </p>
+                                    </div>
+                                    <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="opacity-0 group-hover:opacity-100"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        // handleDeleteMedia(index);
+                                    }}
+                                    >
+                                    <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                );
+                            })}
+
+
+
+
+                            {userImages.length > 0 && (
+                              <div className="p-4 border-t mt-auto">
+                                <Button 
+                                  className="w-full" 
+                                  onClick={analyzeEvidence}
+                                  disabled={isAnalyzing}
+                                >
+                                {isAnalyzing ? (
+                                  <>
+                                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                                        Analyzing...
+                                  </>
+                              ) : (
+                                  <>
+                                  <Microscope className="h-4 w-4 mr-2" />
+                                    Analyze Evidence
+                                  </>
+                                )}
+                                </Button>
+                              </div>
+                            )}
+                        </div>
+
+                )}
+
+                <div className={`flex-1 flex flex-col ${["studio", "chat", "docs"].includes(activeTab) ? "block" : "hidden"}`}>
+
+                
+                  <div className="flex justify-between items-center p-4 border-b">
+                    <Tabs value={activeTab} className="w-full" onValueChange={(value) => setActiveTab(value as "studio" | "chat" | "docs")}>
+                      <TabsList className="grid w-full max-w-sm grid-cols-3">
+                        <TabsTrigger value="studio" className="flex items-center gap-2">
+                          <Microscope className="w-4 h-4" />
+                          Studio
+                        </TabsTrigger>
+                        <TabsTrigger value="chat" className="flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4" />
+                          Chat
+                        </TabsTrigger>
+                        <TabsTrigger value="docs" className="flex items-center gap-2">
+                          <FileText className="w-4 h-4" />
+                          Docs
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
+
+                  <div className="flex-1 flex flex-col items-center justify-center p-4 bg-card/40 w-full h-full overflow-y-auto relative">
+            <div className="w-full max-w-4xl">
+              {activeTab === "studio" ? (
+                <div className="space-y-6">
+                  {selectedImage && (
+                    <div className="border rounded-lg overflow-hidden">
+                      <div style={{ 
+                        height: "250px",
+                        width: "110%", 
+                        backgroundImage: `url(${
+                          showAnnotatedImage && annotatedImages[selectedImage]
+                            ? annotatedImages[selectedImage]
+                            : selectedImage
+                        })`,
+                        backgroundPosition: "center",
+                        backgroundRepeat: "no-repeat",
+                        backgroundSize: "contain",
+                        backgroundColor: "rgba(0, 0, 0, 0.03)"
+                      }}>
+                      </div>
+                      <div className="p-3 bg-muted/20 border-t flex justify-between items-center">
+                        <p className="text-sm font-medium">
+                          {showAnnotatedImage && annotatedImages[selectedImage]
+                            ? "Annotated Evidence Image" 
+                            : "Selected Evidence Image"}
+                        </p>
+                        <div className="flex gap-2">
+                          {annotatedImages[selectedImage] && (
+                            <>
+                              <Button 
+                                size="sm"
+                                variant={showAnnotatedImage ? "default" : "outline"}
+                                onClick={() => setShowAnnotatedImage(true)}
+                              >
+                                <Search className="h-3 w-3 mr-2" />
+                                Annotated
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant={!showAnnotatedImage ? "default" : "outline"}
+                                onClick={() => setShowAnnotatedImage(false)}
+                              >
+                                <Image className="h-3 w-3 mr-2" />
+                                Original
+                              </Button>
+                            </>
+                          )}
+                          <Button 
+                            size="sm"
+                            onClick={() => {
+                              setIsDetectingObjects(true);
+                              detectObjects().finally(() => setIsDetectingObjects(false));
+                            }}
+                            disabled={isDetectingObjects}
+                          >
+                            {isDetectingObjects ? (
+                              <>
+                                <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                                Detecting...
+                              </>
+                            ) : (
+                              <>
+                                <Search className="h-3 w-3 mr-2" />
+                                Detect Objects
+                              </>
+                            )}
+                          </Button>
+                          <Button 
+                            size="sm"
+                            onClick={analyzeEvidence}
+                            disabled={isAnalyzing}
+                          >
+                            {isAnalyzing ? (
+                              <>
+                                <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                                Analyzing...
+                              </>
+                            ) : (
+                              <>
+                                <Microscope className="h-3 w-3 mr-2" />
+                                Analyze
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {uploadedImages.length > 0 && !selectedImage && (
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-medium mb-4">All Evidence Images</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {uploadedImages.map((image, index) => (
+                          <div 
+                            key={index} 
+                            className="border rounded-lg overflow-hidden cursor-pointer hover:border-primary transition-colors"
+                            onClick={() => setSelectedImage(image.preview)}
+                          >
+                            <div className="aspect-square relative">
+                              <img 
+                                src={image.preview} 
+                                alt={`Evidence ${index + 1}`} 
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="p-2 bg-muted/20 border-t">
+                              <p className="text-xs font-medium truncate">Evidence image {index + 1}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4">
+                        <Button 
+                          className="w-full" 
+                          onClick={analyzeEvidence}
+                          disabled={isAnalyzing}
+                        >
+                          {isAnalyzing ? (
+                            <>
+                              <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                              Analyze All Images
+                            </>
+                          ) : (
+                            <>
+                              <Microscope className="h-4 w-4 mr-2" />
+                              Analyze All Images
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedImage && analysisResults && analysisResults.length > 0 && (
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-medium mb-4">Analysis Results for Selected Image</h3>
+                      {analysisResults
+                        .filter(result => {
+                          // Find the index of the selected image
+                          const selectedIndex = uploadedImages.findIndex(img => img.preview === selectedImage);
+                          // Only show results for the selected image index
+                          return selectedIndex >= 0 && result.imageIndex === selectedIndex;
+                        })
+                        .map((result, index) => {
+                          // Apply confidence threshold check
+                          const confidencePercent = result.confidence_score * 100;
+                          const isBelowThreshold = confidencePercent < 20;
+                          const displayCrimeType = isBelowThreshold ? "No Crime Detected" : result.predicted_crime_type;
+                          const displayCrime = isBelowThreshold ? "Confidence below threshold" : result.predicted_crime;
+                          
+                          return (
+                            <div key={index} className="mb-4 p-3 bg-muted/20 rounded-md last:mb-0">
+                              <p className="text-sm font-medium">{displayCrimeType}</p>
+                              <p className="text-sm text-muted-foreground">{displayCrime}</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Confidence: {confidencePercent.toFixed(1)}%
+                                {isBelowThreshold && (
+                                  <span className="ml-2 text-amber-600">(Below 20% threshold)</span>
+                                )}
+                              </p>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                  
+                
+                  {!selectedImage && analysisResults && (
+                    <ResultsDisplay
+                      analysisResults={analysisResults}
+                      caseReport={caseReport}
+                      enhancedImage={enhancedImage}
+                      objectDetectionResults={objectDetectionResults}
+                      onDownloadReport={handleDownloadReport}
+                    />
+                  )}
+                  
+                  {!analysisResults  && !caseReport &&   !enhancedImage  && (
+                    <div className="flex flex-col items-center justify-center p-6 text-center border rounded-lg">
+                      <div className="p-3 bg-muted rounded-lg mb-3">
+                        <Image className="w-8 h-8" />
+                      </div>
+                      <h3 className="font-medium">Select an image or analyze evidence</h3>
+                      <p className="text-xs mt-2 text-muted-foreground">
+                        Click on an image from the left panel or use the analysis tools on the right
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : activeTab === "docs" ? (
+                <div className="flex-1 overflow-hidden">
+                  <DocsInterface />
+                </div>
+              ) :
+              (
+                <div className="flex-1 overflow-hidden">
+                  <ChatInterface 
+                    selectedImage={selectedImage} 
+                    analyzedImages={analyzedImages}
+                    caseId={caseId}
+                  />
+                </div>
+              )}
+            </div>
+            {isProcessing && activeTab === "studio" && <LoadingOverlay />}
+                  </div>
+          `     </div>
+          <div className={`w-96 border-l overflow-y-auto flex flex-col ${activeTab === "studio" || activeTab === "chat" ? "block" : "hidden"}`}>
+          <div className="flex items-center justify-between p-4 border-b">
+            <h2 className="font-semibold">Forensic Tools</h2>
+          </div>
+          
+          <AnalysisTools
+            isAnalyzing={isAnalyzing}
+            hasImages={uploadedImages.length > 0}
+            onAnalyzeEvidence={analyzeEvidence}
+            onImageEnhancement={handleImageEnhancement}
+            onGenerateReport={fetchCaseReport}
+          />
+        </div>
+                
 
                 {/* Studio/Tools Panel */}
-                <div className={`w-96 border-l overflow-y-auto flex flex-col ${activeTab === "studio" ? "block" : "hidden md:block"}`}>
+                {/* <div className={`w-96 border-l overflow-y-auto flex flex-col ${activeTab === "studio" ? "block" : "hidden md:block"}`}>
                     <div className="flex items-center justify-between p-4 border-b">
                         <h2 className="font-semibold">Forensic Tools</h2>
                         <Button variant="ghost" size="icon">
@@ -1217,9 +1815,219 @@ export default function Case() {
                             </div>
                         </div>
                     </div>
+                </div> */}
+
+{/* <div className="flex-1 flex flex-col items-center justify-center p-4 bg-card/40 w-full h-full overflow-y-auto relative">
+            <div className="w-full max-w-4xl">
+              {activeTab === "studio" ? (
+                <div className="space-y-6">
+                  {selectedImage && (
+                    <div className="border rounded-lg overflow-hidden">
+                      <div style={{ 
+                        height: "250px",
+                        width: "110%", 
+                        backgroundImage: `url(${
+                          showAnnotatedImage && annotatedImages[selectedImage]
+                            ? annotatedImages[selectedImage]
+                            : selectedImage
+                        })`,
+                        backgroundPosition: "center",
+                        backgroundRepeat: "no-repeat",
+                        backgroundSize: "contain",
+                        backgroundColor: "rgba(0, 0, 0, 0.03)"
+                      }}>
+                      </div>
+                      <div className="p-3 bg-muted/20 border-t flex justify-between items-center">
+                        <p className="text-sm font-medium">
+                          {showAnnotatedImage && annotatedImages[selectedImage]
+                            ? "Annotated Evidence Image" 
+                            : "Selected Evidence Image"}
+                        </p>
+                        <div className="flex gap-2">
+                          {annotatedImages[selectedImage] && (
+                            <>
+                              <Button 
+                                size="sm"
+                                variant={showAnnotatedImage ? "default" : "outline"}
+                                onClick={() => setShowAnnotatedImage(true)}
+                              >
+                                <Search className="h-3 w-3 mr-2" />
+                                Annotated
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant={!showAnnotatedImage ? "default" : "outline"}
+                                onClick={() => setShowAnnotatedImage(false)}
+                              >
+                                <Image className="h-3 w-3 mr-2" />
+                                Original
+                              </Button>
+                            </>
+                          )}
+                          <Button 
+                            size="sm"
+                            onClick={() => {
+                              setIsDetectingObjects(true);
+                              detectObjects().finally(() => setIsDetectingObjects(false));
+                            }}
+                            disabled={isDetectingObjects}
+                          >
+                            {isDetectingObjects ? (
+                              <>
+                                <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                                Detecting...
+                              </>
+                            ) : (
+                              <>
+                                <Search className="h-3 w-3 mr-2" />
+                                Detect Objects
+                              </>
+                            )}
+                          </Button>
+                          <Button 
+                            size="sm"
+                            onClick={analyzeEvidence}
+                            disabled={isAnalyzing}
+                          >
+                            {isAnalyzing ? (
+                              <>
+                                <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                                Analyzing...
+                              </>
+                            ) : (
+                              <>
+                                <Microscope className="h-3 w-3 mr-2" />
+                                Analyze
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {uploadedImages.length > 0 && !selectedImage && (
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-medium mb-4">All Evidence Images</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {uploadedImages.map((image, index) => (
+                          <div 
+                            key={index} 
+                            className="border rounded-lg overflow-hidden cursor-pointer hover:border-primary transition-colors"
+                            onClick={() => setSelectedImage(image.preview)}
+                          >
+                            <div className="aspect-square relative">
+                              <img 
+                                src={image.preview} 
+                                alt={`Evidence ${index + 1}`} 
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="p-2 bg-muted/20 border-t">
+                              <p className="text-xs font-medium truncate">Evidence image {index + 1}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4">
+                        <Button 
+                          className="w-full" 
+                          onClick={analyzeEvidence}
+                          disabled={isAnalyzing}
+                        >
+                          {isAnalyzing ? (
+                            <>
+                              <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                              Analyze All Images
+                            </>
+                          ) : (
+                            <>
+                              <Microscope className="h-4 w-4 mr-2" />
+                              Analyze All Images
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedImage && analysisResults && analysisResults.length > 0 && (
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-medium mb-4">Analysis Results for Selected Image</h3>
+                      {analysisResults
+                        .filter(result => {
+                          // Find the index of the selected image
+                          const selectedIndex = uploadedImages.findIndex(img => img.preview === selectedImage);
+                          // Only show results for the selected image index
+                          return selectedIndex >= 0 && result.imageIndex === selectedIndex;
+                        })
+                        .map((result, index) => {
+                          // Apply confidence threshold check
+                          const confidencePercent = result.confidence_score * 100;
+                          const isBelowThreshold = confidencePercent < 20;
+                          const displayCrimeType = isBelowThreshold ? "No Crime Detected" : result.predicted_crime_type;
+                          const displayCrime = isBelowThreshold ? "Confidence below threshold" : result.predicted_crime;
+                          
+                          return (
+                            <div key={index} className="mb-4 p-3 bg-muted/20 rounded-md last:mb-0">
+                              <p className="text-sm font-medium">{displayCrimeType}</p>
+                              <p className="text-sm text-muted-foreground">{displayCrime}</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Confidence: {confidencePercent.toFixed(1)}%
+                                {isBelowThreshold && (
+                                  <span className="ml-2 text-amber-600">(Below 20% threshold)</span>
+                                )}
+                              </p>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                  
+                
+                  {!selectedImage && analysisResults && (
+                    <ResultsDisplay
+                      analysisResults={analysisResults}
+                      caseReport={caseReport}
+                      enhancedImage={enhancedImage}
+                      objectDetectionResults={objectDetectionResults}
+                      onDownloadReport={handleDownloadReport}
+                    />
+                  )}
+                  
+                  {!analysisResults  && !caseReport &&   !enhancedImage  && (
+                    <div className="flex flex-col items-center justify-center p-6 text-center border rounded-lg">
+                      <div className="p-3 bg-muted rounded-lg mb-3">
+                        <Image className="w-8 h-8" />
+                      </div>
+                      <h3 className="font-medium">Select an image or analyze evidence</h3>
+                      <p className="text-xs mt-2 text-muted-foreground">
+                        Click on an image from the left panel or use the analysis tools on the right
+                      </p>
+                    </div>
+                  )}
                 </div>
+              ) : activeTab === "docs" ? (
+                <div className="flex-1 overflow-hidden">
+                  <DocsInterface />
+                </div>
+              ) :
+              (
+                <div className="flex-1 overflow-hidden">
+                  <ChatInterface 
+                    selectedImage={selectedImage} 
+                    analyzedImages={analyzedImages}
+                    caseId={caseId}
+                  />
+                </div>
+              )}
             </div>
-            <div className="md:hidden border-t">
+            {isProcessing && activeTab === "studio" && <LoadingOverlay />}
+          </div> */}
+
+
+            </div>
+            {/* <div className="md:hidden border-t">
                 <div className="grid grid-cols-3 divide-x">
                     <button
                         className={`flex flex-col items-center py-3 ${activeTab === "sources" ? "text-primary" : "text-muted-foreground"}`}
@@ -1243,8 +2051,19 @@ export default function Case() {
                         <span className="text-xs">Tools</span>
                     </button>
                 </div>
-            </div>
+            </div> */}
+            
+            
         </div>
+        ):(
+          <div>
+          <h2>Police Video</h2>
+          <video ref={localVideo} autoPlay muted />
+          <video ref={remoteVideo} autoPlay />
+        </div>
+        )}
+      
+      </>
     );
 }
 function Customize({ className }: { className?: string }) {
