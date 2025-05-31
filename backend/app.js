@@ -257,8 +257,9 @@ app.get('/conversations/:caseId', async (req, res) => {
 });
 
 
-app.post('/messages/:caseId', async (req, res) => {
+app.post('/messages/:caseId',authenticateToken, async (req, res) => {
   const caseId  = req.params.caseId;
+  const usermail=req.user.email;
   const { text, senderId } = req.body;
 
   // console.log("Request body:", req.body); // Log incoming data
@@ -273,7 +274,12 @@ app.post('/messages/:caseId', async (req, res) => {
     const objectId = new mongoose.Types.ObjectId(caseId);
     const found = await commoncase.findOne({ _id: objectId });
     if (found) {
-      resolvedSenderId = found.officer; // Default senderId if not provided
+      if(found.officer=== usermail){
+        resolvedSenderId = found.email;
+       }
+      else {
+        resolvedSenderId=found.officer
+      }
     }
 
     if (!resolvedSenderId) {

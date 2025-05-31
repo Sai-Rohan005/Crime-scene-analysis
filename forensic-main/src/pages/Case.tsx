@@ -599,6 +599,8 @@ export default function Case() {
           const response = await axios.post(`http://localhost:5500/messages/${caseId}`, {
             text: currentMessage,
             senderId: ""  
+          },{
+            headers: { Authorization: `Bearer ${token}` },
           });
       
           

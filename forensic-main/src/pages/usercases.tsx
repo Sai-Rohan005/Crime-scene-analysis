@@ -339,6 +339,8 @@ export default function Case() {
         const response = await axios.post(`http://localhost:5500/messages/${caseId}`, {
           text: currentMessage,
           senderId: ""  // Handle senderId logic as per your requirement
+        },{
+          headers: { Authorization: `Bearer ${token}` },
         });
     
         // Mark message as successfully sent (remove "sending" flag)
